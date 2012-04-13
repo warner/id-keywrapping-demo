@@ -1,0 +1,80 @@
+
+* primitives
+** PBKDF2 (RFC2898):
+   - DK=PBKDF2(P,S,c,dkLen)  [PRF]
+   - P: password (string)
+   - S: salt (string)
+   - c: iteration count (int)
+   - dkLen: output length (int, bytes, <=hLen*(2^32-1))
+   - DK: derived key (string, len=dkLen)
+   - PRF: e.g. HMAC(SHA256), or AES+CBC
+   - code:
+     - each block is created independently
+     - first iteration: U = PRF(P, S+uint64(blocknum)), key=U
+     - subsequent iterations: U = PRF(S,U), key=XOR(key,U)
+     - (i.e. build a c-long PRF chain, XOR all outputs together)
+** scrypt (http://www.tarsnap.com/scrypt.html)
+   - DK=out=scrypt(P,S,N,r,p,dkLen) [HMAC_SHA256, Salsa20/8]
+   - P: password (string)
+   - S: salt (string)
+   - N: CPU/memory cost parameter
+   - r: block size parameter, paper recommends r=8
+   - p: parallelization parameter, paper recommends p=1
+   - dkLen: output length (int, bytes, <=hLen*(2^32-1))
+   - work:
+     - code suggests "128*N*r <= memlimit", and "4*N*r*p < opslimit" for CPU
+       time. The scrypt tool does a quick measurement of the local CPU to
+       decide what values to use, influenced by input parameters. "opslimit"
+       appears to be the number of salsa20/8 core invocations, and is
+       constrained to be at least 2^15.
+     - compiling with CFLAGS=-DDEBUG displays N/r/p values
+     - on work laptop, memlimit=1M timelimit=10s gets N=1024,r=8,p=502
+       - it measured 512 salsa20/8 cores taking 310us
+       - note that tool requires "-M 100000", not "-M 1M"
+       - default (no -M) allows use of 228MB, probably .125*sysmem
+     - 10M gets N=8192,r=8,p=63
+     - 100M gets N=65536, r=8, p=7
+     - let's target 100M and my laptop's CPU, so N=65536, r=8, p=7
+** HKDF
+   - K1|K2|K3..|Kt = HKDF(XTS, SKM, CTXinfo, L)  [HMAC-SHA256]
+   - XTS: Extractor Salt (string)
+   - SKM: source key material (string)
+   - CTXinfo: (string)
+   - L: number of key bits (int)
+   - SKM is secret. XTS is random but not-secret. resulting key is bound to
+     CTXinfo.
+   - code:
+     - extract: PRK = HMAC(key=XTS, data=SKM)
+     - expand: K1 = HMAC(key=PRK, data=CTXinfo+0)
+       - K2 = HMAC(key=PRK, data=K1+CTXinfo+1), etc
+** SRP (http://srp.stanford.edu/,
+   http://en.wikipedia.org/wiki/Secure_remote_password_protocol)
+   - system parameters (q, N, g, k)
+   - algorithm choices: SHA-256
+   - small random salt s
+   - I username
+   - p password
+
+
+
+* spec
+** inputs:
+   - password (string)
+   - email (string)
+   - parameters: PBKDF c1, c2, scrypt N,r,p
+   - algorithm choices: PBKDF uses HMAC-SHA256
+** utilities:
+   - A+B: string concatenation: Netstring(A)+Netstring(B)
+** constants:
+   - KW: unique string, maybe "keywrapping-v1@identity.mozilla.com"
+** code:
+   - A = PBKDF(P=password, S=KW+email+"A", c=c1, dkLen=256)
+   - B = scrypt(P=A, S=KW+email+"B", N,r,p, dkLen=256)
+   - PWK|MAC|SRPpw = PBKDF(P=password+B, S=KW+email+"PWK", c=c2, dlLen=3*256)
+   - SRPv = SRP(P=SRPpw, ...)
+   - UK = os.urandom(2*256/8) # 256 enc + 256 MAC
+   - WUK:
+     - IV = os.urandom(256?)
+     - WUK = AES256-CBC(?) (key=PWK, IV, data=UK)
+     - WUKMAC = HMAC-SHA256(key=MAC, data=IV+WUK)
+
