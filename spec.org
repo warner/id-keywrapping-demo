@@ -69,7 +69,7 @@
 ** code:
    - A = PBKDF(P=password, S=KW+email+"A", c=c1, dkLen=256)
    - B = scrypt(P=A, S=KW+email+"B", N,r,p, dkLen=256)
-   - PWK|MAC|SRPpw = PBKDF(P=password+B, S=KW+email+"PWK", c=c2, dlLen=3*256)
+   - PWK|MAC|SRPpw = PBKDF(P=password+B, S=KW+email+"PWK", c=c2, dkLen=3*256)
    - SRPv = SRP(P=SRPpw, ...)
    - UK = os.urandom(2*256/8) # 256 enc + 256 MAC
    - WUK:
