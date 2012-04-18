@@ -60,20 +60,39 @@
 ** inputs:
    - password (string)
    - email (string)
-   - parameters: PBKDF c1, c2, scrypt N,r,p
-   - algorithm choices: PBKDF uses HMAC-SHA256
 ** utilities:
    - A+B: string concatenation: Netstring(A)+Netstring(B)
+   - netstring(): "%d:%s." % (len(s), s)
+   - plus(*strings): "".join([netstring(s) for s in strings])
+   - encrypt_and_mac(ENC, MAC, data):
+     - IV = os.urandom(dkLen)
+     - A = AES256-CBC(key=ENC, IV, data)
+     - B = HMAC-SHA256(key=MAC, data=concat(IV,A))
+     - return IV+A+B
 ** constants:
-   - KW: unique string, maybe "keywrapping-v1@identity.mozilla.com"
+   - KW1 = "keywrapping-v1@identity.mozilla.com:1"
+   - KW2 = "keywrapping-v1@identity.mozilla.com:2"
+   - KW3 = "keywrapping-v1@identity.mozilla.com:3"
+   - KW3 = "keywrapping-v1@identity.mozilla.com:4"
+** parameters
+   - c1 = 10000 # PBKDF2 iteration count
+   - c2 = 10000
+   - N,r,p = 32768,8,1  # scrypt 100MB/1.0s, on work laptop
+   - dkLen = 256/8 = 32 # bytes
+   - algorithm choices: PBKDF uses HMAC-SHA256
 ** code:
-   - A = PBKDF(P=password, S=KW+email+"A", c=c1, dkLen=256)
-   - B = scrypt(P=A, S=KW+email+"B", N,r,p, dkLen=256)
-   - PWK|MAC|SRPpw = PBKDF(P=password+B, S=KW+email+"PWK", c=c2, dkLen=3*256)
-   - SRPv = SRP(P=SRPpw, ...)
-   - UK = os.urandom(2*256/8) # 256 enc + 256 MAC
-   - WUK:
-     - IV = os.urandom(256?)
-     - WUK = AES256-CBC(?) (key=PWK, IV, data=UK)
-     - WUKMAC = HMAC-SHA256(key=MAC, data=IV+WUK)
-
+   - A = PBKDF(P=password, S=KW1+email, c=c1)
+   - B = scrypt(P=A, S=KW2, N,r,p)
+   - C = PBKDF(P=password+B, S=KW3, c=c2)
+   - PWK|MAC|SRPpw = HKDF(SKM=C, XTS=KW4, CTXinfo="", L=3*dkLen)
+   - SRPv,SRPsalt = SRP(P=SRPpw, ...) // SRPsalt is short random
+     - this is done once, during account setup
+     - send (email, SRPv, SRPsalt) safely to server
+   - store initial WUK:
+     - UK = os.urandom(2*dkLen) # 256 enc + 256 MAC
+     - WUK: WUKout = encrypt_and_mac(PWK, MAC, data=UK)
+     - perform SRP to get Ksession
+     - ENCsess, MACsess = HKDF(SKM=Ksession, XTS=KW5, CTXinfo=""?, L=2*dkLen)
+     - command = json.stringify(["update", IV+WUK, WUKMAC])
+     - MSG = encrypt_and_mac(ENCsess, MACsess, data=command)
+     - send(MSG)

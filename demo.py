@@ -28,6 +28,7 @@ def plus(*strings):
 c1 = 10000
 c2 = 10000
 N,r,p = pick_params(maxmem=100*MB, maxtime=1.0)
+print N,r,p
 dkLen = 256/8
 
 email = "bob@example.org"
