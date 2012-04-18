@@ -81,18 +81,36 @@
    - dkLen = 256/8 = 32 # bytes
    - algorithm choices: PBKDF uses HMAC-SHA256
 ** code:
-   - A = PBKDF(P=password, S=KW1+email, c=c1)
-   - B = scrypt(P=A, S=KW2, N,r,p)
-   - C = PBKDF(P=password+B, S=KW3, c=c2)
-   - PWK|MAC|SRPpw = HKDF(SKM=C, XTS=KW4, CTXinfo="", L=3*dkLen)
-   - SRPv,SRPsalt = SRP(P=SRPpw, ...) // SRPsalt is short random
-     - this is done once, during account setup
-     - send (email, SRPv, SRPsalt) safely to server
-   - store initial WUK:
+   - compute PWK:
+     - A = PBKDF(P=password, S=KW1+email, c=c1)
+     - B = scrypt(P=A, S=KW2, N,r,p)
+     - C = PBKDF(P=password+B, S=KW3, c=c2)
+     - PWK|MAC|SRPpw = HKDF(SKM=C, XTS=KW4, CTXinfo="", L=3*dkLen)
+   - create initial UK (done once, during account setup)
      - UK = os.urandom(2*dkLen) # 256 enc + 256 MAC
-     - WUK: WUKout = encrypt_and_mac(PWK, MAC, data=UK)
+   - initial key-wrapping setup (done once, during account setup):
+     - compute PWK
+     - SRPv,SRPsalt = SRP(P=SRPpw, ...) // SRPsalt is short random
+     - send (email, SRPv, SRPsalt) safely to server
+     - store initial WUK:
+       - WUK: WUKout = encrypt_and_mac(PWK, MAC, data=UK)
+       - perform SRP to get Ksession
+         - server remembers H(Ksession)->Ksession for a little while
+       - ENCsess, MACsess = HKDF(SKM=Ksession, XTS=KW5, CTXinfo=""?, L=2*dkLen)
+       - command = json.stringify(["update", WUKOUT])
+       - MSG = encrypt_and_mac(ENCsess, MACsess, data=command)
+       - send(MSG)
+   - retrieve WUK (from password)
+     - send email, retrieve SRPsalt
+     - compute PWK (while waiting for SRPsalt)
      - perform SRP to get Ksession
+       - server remembers H(Ksession)->Ksession for a little while
      - ENCsess, MACsess = HKDF(SKM=Ksession, XTS=KW5, CTXinfo=""?, L=2*dkLen)
+     - send command ["read-encrypted", H(Ksession)]
+     - get MSG
+     -  ...
      - command = json.stringify(["update", IV+WUK, WUKMAC])
      - MSG = encrypt_and_mac(ENCsess, MACsess, data=command)
      - send(MSG)
+     - WUK: WUKout = encrypt_and_mac(PWK, MAC, data=UK)
+     - 
