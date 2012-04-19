@@ -61,19 +61,28 @@
    - password (string)
    - email (string)
 ** utilities:
-   - A+B: string concatenation: Netstring(A)+Netstring(B)
-   - netstring(): "%d:%s." % (len(s), s)
-   - plus(*strings): "".join([netstring(s) for s in strings])
    - encrypt_and_mac(ENC, MAC, data):
      - IV = os.urandom(dkLen)
      - A = AES256-CBC(key=ENC, IV, data)
      - B = HMAC-SHA256(key=MAC, data=concat(IV,A))
      - return IV+A+B
+   - decrypt_and_mac(ENC, MAC, encdata)
+     - IV=encdata[:32], data = encdata[32:-32], macout = encdata[-32:]
+     - check HMAC-SHA256(key=MAC, data=encdata[:-32]) == macout, else fail
+     - return AES256-CBC-decrypt(key=ENC, IV, data)
+   - wrap_session(salt, key=SRPKsession, message)
+     - ENC,MAC = HKDF(SDK=SRPKsession, XTS=salt, CTXinfo="", L=2*dkLen)
+     - wire = SHA256(SRPKession)+encrypt_and_mac(ENC,MAC, message)
+     - return wire
+   - unwrap_session(wire, salt)
+     - HK = wire[:32], encmsg = wire[32:]
+     - look up SRPKsession,email=sessions[HK]
+     - ENC,MAC = HKDF(SDK=SRPKsession, XTS=KWses, CTXinfo="", L=2*dkLen)
+     - message = decrypt_and_mac(ENC, MAC, encmsg)
+     - return email, message
 ** constants:
-   - KW1 = "keywrapping-v1@identity.mozilla.com:1"
-   - KW2 = "keywrapping-v1@identity.mozilla.com:2"
-   - KW3 = "keywrapping-v1@identity.mozilla.com:3"
-   - KW3 = "keywrapping-v1@identity.mozilla.com:4"
+   - KW1 = "identity.mozilla.com/keywrapping/v1/1:"
+   - KW2 = "identity.mozilla.com/keywrapping/v1/2:", etc KW3, 4, 5
 ** parameters
    - c1 = 10000 # PBKDF2 iteration count
    - c2 = 10000
@@ -91,26 +100,40 @@
    - initial key-wrapping setup (done once, during account setup):
      - compute PWK
      - SRPv,SRPsalt = SRP(P=SRPpw, ...) // SRPsalt is short random
-     - send (email, SRPv, SRPsalt) safely to server
+     - send (email, SRPv, SRPsalt) safely to server XXX
      - store initial WUK:
-       - WUK: WUKout = encrypt_and_mac(PWK, MAC, data=UK)
+       - client:
+         - WUK: WUKout = encrypt_and_mac(PWK, MAC, data=UK)
+         - perform SRP to get Ksession
+           - server remembers H(Ksession)->(Ksession,email) for a little while
+         - command = json.stringify(["update", WUKOUT])
+         - send(wrap_session(salt=KWtoserver, Ksession, command))
+       - server:
+         - email,command_s=unwrap_session(salt=KWtoserver, wire)
+         - command = json.decode(command_s)
+         - if command[0]=="update", store(email, command[1]))
+         - response = wrap_session(salt=KWtoclient, Ksession, "ok")
+         - return(response)
+       - client:
+         - ...
+   - retrieve WUK (from password)
+     - client:
+       - send email, retrieve SRPsalt
+       - compute PWK (while waiting for SRPsalt)
        - perform SRP to get Ksession
-         - server remembers H(Ksession)->Ksession for a little while
-       - ENCsess, MACsess = HKDF(SKM=Ksession, XTS=KW5, CTXinfo=""?, L=2*dkLen)
-       - command = json.stringify(["update", WUKOUT])
+         - server remembers H(Ksession)->(Ksession,email) for a little while
+       - command = json.stringify(["read"])
+       - send(wrap_session(Ksession, command))
+     - server:
+       - email,command_s=unwrap_session(wire)
+       - command = json.decode(command_s)
+       - if command[0]=="read", data=load(email)
+       - return response = wrap_session(salt=KWtoclient, Ksession, data)
+     - client:
+       - data = unwrap_session(data)
+       - ...
+       - command = json.stringify(["update", IV+WUK, WUKMAC])
        - MSG = encrypt_and_mac(ENCsess, MACsess, data=command)
        - send(MSG)
-   - retrieve WUK (from password)
-     - send email, retrieve SRPsalt
-     - compute PWK (while waiting for SRPsalt)
-     - perform SRP to get Ksession
-       - server remembers H(Ksession)->Ksession for a little while
-     - ENCsess, MACsess = HKDF(SKM=Ksession, XTS=KW5, CTXinfo=""?, L=2*dkLen)
-     - send command ["read-encrypted", H(Ksession)]
-     - get MSG
-     -  ...
-     - command = json.stringify(["update", IV+WUK, WUKMAC])
-     - MSG = encrypt_and_mac(ENCsess, MACsess, data=command)
-     - send(MSG)
-     - WUK: WUKout = encrypt_and_mac(PWK, MAC, data=UK)
-     - 
+       - WUK: WUKout = encrypt_and_mac(PWK, MAC, data=UK)
+       - 
