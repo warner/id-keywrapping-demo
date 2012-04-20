@@ -60,84 +60,88 @@
 ** inputs:
    - password (string)
    - email (string)
-** utilities:
-   - encrypt_and_mac(ENC, MAC, data):
-     - IV = os.urandom(dkLen)
-     - A = AES256-CBC(key=ENC, IV, data)
-     - B = HMAC-SHA256(key=MAC, data=concat(IV,A))
-     - return IV+A+B
-   - decrypt_and_mac(ENC, MAC, encdata)
-     - IV=encdata[:32], data = encdata[32:-32], macout = encdata[-32:]
-     - check HMAC-SHA256(key=MAC, data=encdata[:-32]) == macout, else fail
-     - return AES256-CBC-decrypt(key=ENC, IV, data)
-   - make_session_keys(key=SRPKsession)
-     - ENC1,MAC2,ENC2,MAC2 = HKDF(SDK=key, XTS=KW5, CTXinfo="", L=4*dkLen)
-   - send_request(message)
-     - TX = SHA256(SRPKession)+encrypt_and_mac(ENC1,MAC1,message)
-     - send HK+TX
-     - receive RX
-     - return decrypt_and_mac(ENC2,MAC2,RX)
-   - receive_request(HKsession, TX) ...
-   - unwrap_session(wire, salt)
-     - HK = wire[:32], encmsg = wire[32:]
-     - look up SRPKsession,email=sessions[HK]
-     - ENC,MAC = HKDF(SDK=SRPKsession, XTS=KWses, CTXinfo="", L=2*dkLen)
-     - message = decrypt_and_mac(ENC, MAC, encmsg)
-     - return email, message
 ** constants:
-   - KW1 = "identity.mozilla.com/keywrapping/v1/1:"
-   - KW2 = "identity.mozilla.com/keywrapping/v1/2:", etc KW3, 4, 5
+   - KW(s) = "identity.mozilla.com/keywrapping/v1/%s:"
 ** parameters
    - c1 = 10000 # PBKDF2 iteration count
    - c2 = 10000
    - N,r,p = 32768,8,1  # scrypt 100MB/1.0s, on work laptop
    - dkLen = 256/8 = 32 # bytes
    - algorithm choices: PBKDF uses HMAC-SHA256
+** utilities:
+   - perform_SRP(email, SRPpw_b64, SRPsalt_b64=None)
+     - if not SRPsalt:
+       - send TX=json.dump(["get-salt", email]).encode(utf8)
+       - server receive_request(TX)
+         - if pieces[0] == "get-salt"
+           - return db_salt_b64[email]
+       - receive SRPsalt_b64
+     - do SRP
+     - return SRPKsession_b64
+   - encrypt_and_mac(ENC_b64, MAC_b64, data_b64):
+     - IV = os.urandom(dkLen)
+     - A = AES256-CBC(key=ENC, IV, data)
+     - B = HMAC-SHA256(key=MAC, data=concat(IV,A))
+     - return b64(IV+A+B)
+   - decrypt_and_mac(ENC_b64, MAC_b64, encdata_b64)
+     - IV=encdata[:32], data = encdata[32:-32], macout = encdata[-32:]
+     - check HMAC-SHA256(key=MAC, data=encdata[:-32]) == macout, else fail
+     - return b64(AES256-CBC-decrypt(key=ENC, IV, data))
+   - make_session_keys(key=SRPKsession_b64)
+     - k = unb64(SRPKsession_b64)
+     - keys=HKDF(SDK=k, XTS=KW(session-keys), CTXinfo="", L=4*dkLen)
+     - ENC1_b64,MAC1_b64,ENC2_b64,MAC2_b64 = [b64(k) for keys.split(32)]
+     - SessionID_b64 = b64(SHA256(SRPKession))
+   - send_request(msg_obj)  [client-side]
+     - data_b64 = b64(json.dump(msg_obj).encode("utf-8"))
+     - enc_data_b64 = encrypt_and_mac(ENC1_b64,MAC1_b64,data_b64)
+     - enc_msg = ["encrypted-request", SessionID_b64, enc_data_b64]
+     - send TX=json.dump(enc_msg).encode(utf8)
+     - receive RX_b64
+     - response_data_b64 = decrypt_and_mac(ENC2_b64,MAC2_b64,RX_b64)
+     - return json.load(unb64(response_data_b64).decode(utf8))
+   - receive_request(TX)  [server-side]
+     - pieces = json.load(TX.decode(utf8))
+     - if pieces[0] == "encrypted-request"
+       - SessionID_b64 = pieces[1], enc_data_b64=pieces[2]
+       - SRPKsession,email = sessions[SessionID_b64]
+       - make_session_keys()
+       - request_data_b64 = decrypt_and_mac(ENC1_b64,MAC1_b64,enc_data_b64)
+       - request = json.load(unb64(request_data_b64).decode(utf8))
+       - response=process_request(email, request)
+       - response_data_b64 = b64(json.dump(response).encode(utf8))
+       - return RX_b64 = encrypt_and_mac(ENC2_b64,MAC2_b64,response_b64)
 ** code:
    - compute PWK:
-     - A = PBKDF(P=password, S=KW1+email, c=c1)
-     - B = scrypt(P=A, S=KW2, N,r,p)
-     - C = PBKDF(P=password+B, S=KW3, c=c2)
-     - PWK|MAC|SRPpw = HKDF(SKM=C, XTS=KW4, CTXinfo="", L=3*dkLen)
+     - A = PBKDF(P=password, S=KW("first-PBKDF")+email, c=c1)
+     - B = scrypt(P=A, S=KW("scrypt"), N,r,p)
+     - C = PBKDF(P=password+B, S=KW("second-PBKDF"), c=c2)
+     - PWK|MAC|SRPpw = HKDF(SKM=C, XTS=KW("three-keys", CTXinfo="", L=3*dkLen)
    - create initial UK (done once, during account setup)
-     - UK = os.urandom(2*dkLen) # 256 enc + 256 MAC
+     - UK_b64 = b64(os.urandom(2*dkLen)) # 256 enc + 256 MAC
    - initial key-wrapping setup (done once, during account setup):
      - compute PWK
      - SRPv,SRPsalt = SRP(P=SRPpw, ...) // SRPsalt is short random
      - send (email, SRPv, SRPsalt) safely to server XXX
      - store initial WUK:
        - client:
-         - WUK: WUKout = encrypt_and_mac(PWK, MAC, data=UK)
-         - perform SRP to get Ksession
+         - WUK: WUKout_b64 = encrypt_and_mac(PWK, MAC, data=UK)
+         - SRPKsession_b64 = perform_SRP(email, SRPpw_b64, SRPsalt_b64)
            - server remembers H(Ksession)->(Ksession,email) for a little while
-         - command = json.stringify(["update", WUKOUT])
-         - send(wrap_session(salt=KWtoserver, Ksession, command))
-       - server:
-         - email,command_s=unwrap_session(salt=KWtoserver, wire)
-         - command = json.decode(command_s)
-         - if command[0]=="update", store(email, command[1]))
-         - response = wrap_session(salt=KWtoclient, Ksession, "ok")
-         - return(response)
-       - client:
-         - ...
+         - make_session_keys()
+         - send_request(["set", WUKout_b64])
+         - response should be ["ok"]
+       - server process_request(email, request):
+         - if request[0] == "set": db[email]=request[1], return ["ok"]
    - retrieve WUK (from password)
      - client:
        - send email, retrieve SRPsalt
        - compute PWK (while waiting for SRPsalt)
        - perform SRP to get Ksession
          - server remembers H(Ksession)->(Ksession,email) for a little while
-       - command = json.stringify(["read"])
-       - send(wrap_session(Ksession, command))
-     - server:
-       - email,command_s=unwrap_session(wire)
-       - command = json.decode(command_s)
-       - if command[0]=="read", data=load(email)
-       - return response = wrap_session(salt=KWtoclient, Ksession, data)
-     - client:
-       - data = unwrap_session(data)
-       - ...
-       - command = json.stringify(["update", IV+WUK, WUKMAC])
-       - MSG = encrypt_and_mac(ENCsess, MACsess, data=command)
-       - send(MSG)
-       - WUK: WUKout = encrypt_and_mac(PWK, MAC, data=UK)
-       - 
+       - make_session_keys()
+       - send_request(["get"])
+       - response should be ["ok", WUKout_b64]
+       - UK_b64 = decrypt_and_mac(PWK,MAC,WUKout_b64)
+     - server process_request(email, request):
+       - if request[0] == "read": return ["ok", db[email]]
