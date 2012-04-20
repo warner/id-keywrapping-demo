@@ -70,10 +70,14 @@
      - IV=encdata[:32], data = encdata[32:-32], macout = encdata[-32:]
      - check HMAC-SHA256(key=MAC, data=encdata[:-32]) == macout, else fail
      - return AES256-CBC-decrypt(key=ENC, IV, data)
-   - wrap_session(salt, key=SRPKsession, message)
-     - ENC,MAC = HKDF(SDK=SRPKsession, XTS=salt, CTXinfo="", L=2*dkLen)
-     - wire = SHA256(SRPKession)+encrypt_and_mac(ENC,MAC, message)
-     - return wire
+   - make_session_keys(key=SRPKsession)
+     - ENC1,MAC2,ENC2,MAC2 = HKDF(SDK=key, XTS=KW5, CTXinfo="", L=4*dkLen)
+   - send_request(message)
+     - TX = SHA256(SRPKession)+encrypt_and_mac(ENC1,MAC1,message)
+     - send HK+TX
+     - receive RX
+     - return decrypt_and_mac(ENC2,MAC2,RX)
+   - receive_request(HKsession, TX) ...
    - unwrap_session(wire, salt)
      - HK = wire[:32], encmsg = wire[32:]
      - look up SRPKsession,email=sessions[HK]
