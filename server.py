@@ -18,7 +18,6 @@ class Handler(resource.Resource):
         self.sessions = {} # -> (SRPKsession, email) # after SRP
 
     def receive_request(self, tx):
-        print "receive_request", tx
         pieces = json.loads(tx.decode("utf-8"))
         if pieces[0] == "magic-send-safely":
             print "MAGIC"
@@ -26,12 +25,11 @@ class Handler(resource.Resource):
             self.SRPverifier_b64[email] = SRPverifier_b64
             self.SRPsalt_b64[email] = SRPsalt_b64
             return "ok"
-        if pieces[0] == "get-salt":
-            print "GET SALT"
-            email = pieces[1]
-            return self.SRPsalt_b64[email]
+        #if pieces[0] == "get-salt":
+        #    print "GET SALT"
+        #    email = pieces[1]
+        #    return self.SRPsalt_b64[email]
         if pieces[0] == "srp-1":
-            print "SRP 1"
             sid_b64, email, A_b64 = pieces[1:4]
             if sid_b64 in self.verifiers or sid_b64 in self.sessions:
                 raise Oops("sessionid already claimed")
@@ -42,11 +40,10 @@ class Handler(resource.Resource):
             self.verifiers[sid_b64] = (v, email)
             s,B = v.get_challenge()
             if s is None or B is None:
-                raise Oops("SRP rejected")
+                raise Oops("SRP rejected (A)")
             resp = ["ok", b64encode(s), b64encode(B)]
             return json.dumps(resp).encode("utf-8")
         if pieces[0] == "srp-2":
-            print "SRP-2"
             sid_b64, M_b64 = pieces[1:3]
             if sid_b64 not in self.verifiers:
                 raise Oops("no such session")
@@ -55,7 +52,7 @@ class Handler(resource.Resource):
             (v,email) = self.verifiers.pop(sid_b64)
             HAMK = v.verify_session(b64decode(M_b64))
             if HAMK is None:
-                raise Oops("SRP rejected")
+                raise Oops("SRP rejected (M)")
             if not v.authenticated():
                 raise Oops("SRP rejected")
             k_b64 = b64encode(v.get_session_key())
@@ -63,7 +60,6 @@ class Handler(resource.Resource):
             resp = ["ok", b64encode(HAMK)]
             return json.dumps(resp).encode("utf-8")
         if pieces[0] == "encrypted-request":
-            print "ENCRYPTED-REQUEST"
             sid_b64, enc_req_b64 = (pieces[1], pieces[2])
             if sid_b64 not in self.sessions:
                 raise Oops("no such session")

@@ -34,31 +34,32 @@ dkLen = 256/8
 email = "bob@example.org"
 password = "password"
 
-Tstart = time.time()
-A = PBKDF2(password=password, salt=plus(KW1, email), c=c1, dkLen=dkLen)
-Ta = time.time()
-print "time[A]:", Ta-Tstart
-B = scrypt(password=A, salt=plus(KW2, email), N=N,r=r,p=p, dkLen=256/8)
-Tb = time.time()
-print "time[B]:", Tb-Ta
-C = PBKDF2(password=plus(password,B), salt=plus(KW3, email), c=c2, dkLen=3*dkLen)
-Tc = time.time()
-print "time[C]:", Tc-Tb
-PWK, MAC, SRPpw = C[:dkLen], C[dkLen:2*dkLen], C[2*dkLen:3*dkLen]
-SRPsalt, SRPvkey = create_salted_verification_key(email, SRPpw, hash_alg=SHA256)
-Td = time.time()
-print "time[D]:", Td-Tc
-print "time[total]:", Td-Tstart
-print
+if False:
+    Tstart = time.time()
+    A = PBKDF2(password=password, salt=plus(KW1, email), c=c1, dkLen=dkLen)
+    Ta = time.time()
+    print "time[A]:", Ta-Tstart
+    B = scrypt(password=A, salt=plus(KW2, email), N=N,r=r,p=p, dkLen=256/8)
+    Tb = time.time()
+    print "time[B]:", Tb-Ta
+    C = PBKDF2(password=plus(password,B), salt=plus(KW3, email), c=c2, dkLen=3*dkLen)
+    Tc = time.time()
+    print "time[C]:", Tc-Tb
+    PWK, MAC, SRPpw = C[:dkLen], C[dkLen:2*dkLen], C[2*dkLen:3*dkLen]
+    SRPsalt, SRPvkey = create_salted_verification_key(email, SRPpw, hash_alg=SHA256)
+    Td = time.time()
+    print "time[D]:", Td-Tc
+    print "time[total]:", Td-Tstart
+    print
 
-print "PWK:", hexlify(PWK)
-print "MAC:", hexlify(MAC)
-print "SRPpw:", hexlify(SRPpw)
-print
+    print "PWK:", hexlify(PWK)
+    print "MAC:", hexlify(MAC)
+    print "SRPpw:", hexlify(SRPpw)
+    print
 
-print "SRPvkey:", hexlify(SRPvkey)
-print "SRPsalt:", hexlify(SRPsalt)
-sys.exit(0)
+    print "SRPvkey:", hexlify(SRPvkey)
+    print "SRPsalt:", hexlify(SRPsalt)
+    sys.exit(0)
 
 salt,vkey = create_salted_verification_key(email, password, hash_alg=SHA256)
 print "vkey=%s" % vkey.encode("hex")

@@ -43,7 +43,7 @@ if mode == "init":
     print "UK created:", UK_b64
 
     PWK_b64, MAC_b64, SRPpw_b64 = build_PWK(password_b64, email)
-    SRPv_b64, SRPsalt_b64 = do_SRP_setup(SRPpw_b64, email)
+    SRPsalt_b64, SRPv_b64 = do_SRP_setup(SRPpw_b64, email)
     MAGIC_SEND_SAFELY(db_server, [email, SRPv_b64, SRPsalt_b64])
 
     WUK_b64 = encrypt_and_mac(PWK_b64, MAC_b64, UK_b64)
@@ -51,25 +51,25 @@ if mode == "init":
     enc1_b64,mac1_b64,enc2_b64,mac2_b64 = make_session_keys(SRPKsession_b64)
     req = ["set", WUK_b64]
     msg = client_create_request(req, enc1_b64, mac1_b64, sid_b64)
-    rx = do_network(msg)
+    rx = do_network(db_server, msg)
     resp = client_process_response(rx, enc2_b64, mac2_b64)
     if resp[0] != "ok":
         raise Oops("server reject")
     print "UK stored"
-    os.exit(0)
+    sys.exit(0)
 
 if mode == "read":
     PWK_b64, MAC_b64, SRPpw_b64 = build_PWK(password_b64, email)
-    SRPv_b64, SRPsalt_b64 = do_SRP_setup(db_server, SRPpw_b64, email)
+    SRPsalt_b64, SRPv_b64 = do_SRP_setup(SRPpw_b64, email)
     SRPKsession_b64, sid_b64 = do_SRP(db_server, email, SRPpw_b64)
     enc1_b64,mac1_b64,enc2_b64,mac2_b64 = make_session_keys(SRPKsession_b64)
     req = ["get"]
     msg = client_create_request(req, enc1_b64, mac1_b64, sid_b64)
-    rx = do_network(msg)
+    rx = do_network(db_server, msg)
     resp = client_process_response(rx, enc2_b64, mac2_b64)
     if resp[0] != "ok":
         raise Oops("server reject")
     WUK_b64 = resp[1]
     UK_b64 = decrypt(PWK_b64, MAC_b64, WUK_b64)
     print "UK read:", UK_b64
-    os.exit(0)
+    sys.exit(0)

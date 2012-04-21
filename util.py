@@ -62,20 +62,22 @@ def do_SRP_setup(SRPpw_b64, email):
     return b64encode(SRPsalt), b64encode(SRPvkey)
 
 def do_SRP(server_url, email, SRPpw_b64, salt_b64=None):
-    if not salt_b64:
-        salt_b64 = do_network(server_url, ["get-salt", email])
+    #if not salt_b64:
+    #    # XXX: this is redundant: the 's' in 's,B' challenge is the salt
+    #    salt_b64 = do_network(server_url, ["get-salt", email])
     session_id_b64 = b64encode(os.urandom(KEYLEN))
     # XXX: email is unicode, right? so pass email.encode("utf-8") ?
     u = srp.User(email, b64decode(SRPpw_b64), hash_alg=srp.SHA256)
     _ignored_username, msg1_A = u.start_authentication()
-    rd = do_network(server_url, ["srp-1", session_id_b64, email,
-                                 b64encode(msg1_A)])
+    assert _ignored_username == email
+    rd = do_network(server_url, ["srp-1",
+                                 session_id_b64, email, b64encode(msg1_A)])
     r = json.loads(rd.decode("utf-8"))
     if r[0] != "ok": raise Oops("srp-1 error")
     s,B = b64decode(r[1]), b64decode(r[2])
     M = u.process_challenge(s, B)
     if M is None:
-        raise Oops("SRP rejected")
+        raise Oops("SRP rejected (s,B)")
     rd = do_network(server_url, ["srp-2", session_id_b64, b64encode(M)])
     r = json.loads(rd.decode("utf-8"))
     if r[0] != "ok": raise Oops("srp-1 error")
@@ -96,7 +98,7 @@ def do_network(url, req_obj):
 def make_session_keys(SRPKSession_b64):
     SRPKSession = b64decode(SRPKSession_b64)
     out = HKDF(SKM=SRPKSession, XTS=SALT("session-keys"), CTXinfo="",
-               L=4*KEYLEN)
+               dkLen=4*KEYLEN)
     keys = [b64encode(out[i:i+KEYLEN]) for i in range(0, len(out), KEYLEN)]
     (ENC1, MAC1, ENC2, MAC2) = keys
     return (ENC1, MAC1, ENC2, MAC2)
@@ -121,7 +123,7 @@ def client_create_request(req_obj, enc1_b64, mac1_b64, SessionID_b64):
     data_b64 = b64encode(json.dumps(req_obj).encode("utf-8"))
     enc_data_b64 = encrypt_and_mac(enc1_b64, mac1_b64, data_b64)
     enc_msg = ["encrypted-request", SessionID_b64, enc_data_b64]
-    return json.dump(enc_msg).encode("utf-8")
+    return enc_msg
 
 def client_process_response(rx_b64, enc2_b64, mac2_b64):
     response_data_b64 = decrypt(enc2_b64, mac2_b64, rx_b64)
