@@ -1,4 +1,8 @@
+import json
+from base64 import b64encode, b64decode
 from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
+import srp
+from util import make_session_keys, encrypt_and_mac, decrypt, Oops
 
 class Server:
     def __init__(self):
@@ -20,8 +24,8 @@ class Server:
                 raise Oops("sessionid already claimed")
             salt = b64decode(self.SRPsalt_b64[email])
             vkey = b64decode(self.SRPverifier_b64[email])
-            v = srp.Verifier(username, salt, vkey, b64decode(A_b64),
-                             hash_alg=SHA256)
+            v = srp.Verifier(email, salt, vkey, b64decode(A_b64),
+                             hash_alg=srp.SHA256)
             self.verifiers[sid_b64] = (v, email)
             s,B = v.get_challenge()
             if s is None or B is None:
@@ -35,7 +39,7 @@ class Server:
             if sid_b64 in self.session:
                 raise Oops("sessionid already claimed")
             (v,email) = self.verifiers.pop(sid_b64)
-            HAMK = v.verify_session(b64decode(M))
+            HAMK = v.verify_session(b64decode(M_b64))
             if HAMK is None:
                 raise Oops("SRP rejected")
             if not v.authenticated():

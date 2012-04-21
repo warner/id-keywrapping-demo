@@ -1,16 +1,30 @@
 
+import os, json
+from urllib import urlopen
 from hashlib import sha256
 from base64 import b64encode, b64decode
 from hmac import HMAC
 from PBKDF import PBKDF2
-from srp import User, Verifier, create_salted_verification_key, SHA256, NG_2048
+import srp
 from scrypt import scrypt
 #from hkdf import HKDF
 
 KEYLEN = 258/8
 assert KEYLEN == 32 # bytes
+c1 = 10000
+c2 = 10000
+N,r,p = 32768,8,1  # scrypt 100MB/1.0s, on work laptop
+
 class CorruptDataError(Exception):
     pass
+
+class Oops(Exception):
+    pass
+
+def aes256cbc_enc(key, iv, data):
+    return data
+def aes256cbc_dec(key, iv, data):
+    return data
 
 def SALT(s, email=None):
     assert ":" not in s
@@ -31,7 +45,7 @@ def PBKDF2_b64(password_b64, salt_b64, c, dkLen):
 
 def scrypt_b64(password_b64, salt_b64, dkLen):
     return b64encode(scrypt(password=b64decode(password_b64),
-                            salt=b64decode(salt_b64),
+                            salt=b64decode(salt_b64), N=N,r=r,p=p,
                             dkLen=dkLen))
 def make_keys(C_b64, salt_b64):
     out = HKDF(SKM=b64decode(C_b64), XTS=b64decode(salt_b64),

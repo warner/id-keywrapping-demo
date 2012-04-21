@@ -1,7 +1,12 @@
 
-import sys
+import os, sys
 from base64 import b64encode
-from util import SALT_b64, KEYLEN
+from util import (SALT_b64, KEYLEN, PBKDF2_b64, scrypt_b64, c1,c2,
+                  make_keys, make_session_keys, do_SRP_setup, do_SRP,
+                  encrypt_and_mac, decrypt,
+                  do_network, client_create_request, client_process_response,
+                  Oops
+                  )
 
 email, password, mode = sys.argv[1:4]
 db_server = "http://localhost:8066/"
@@ -23,7 +28,7 @@ def build_PWK(password, email):
     # this is local
     C_b64 = PBKDF2_b64(password=B_b64+password,
                        salt=SALT_b64("second-PBKDF",email),
-                       dkLen=KEYLEN)
+                       c=c2, dkLen=KEYLEN)
     PWK_b64, MAC_b64, SRPpw_b64 = make_keys(C_b64, SALT_b64("three-keys"))
     return (PWK_b64, MAC_b64, SRPpw_b64)
 
