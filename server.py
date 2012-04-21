@@ -14,7 +14,7 @@ class Server:
         self.verifiers = {} # -> (srp.Verifier,email) # during SRP processing
         self.sessions = {} # -> (SRPKsession, email) # after SRP
     def receive_request(self, tx):
-        pieces = json.load(tx.decode("utf-8"))
+        pieces = json.loads(tx.decode("utf-8"))
         if pieces[0] == "magic-send-safely":
             print "MAGIC"
             email, SRPverifier_b64, SRPsalt_b64 = pieces[1:4]
@@ -67,9 +67,9 @@ class Server:
             k_b64,email = self.sessions.pop(sid_b64)
             (enc1_b64,mac1_b64,enc2_b64,mac2_b64) = make_session_keys(k_b64)
             rd_b64 = decrypt(enc1_b64, mac1_b64, enc_req_b64)
-            req = json.load(b64decode(rd_b64.decode("utf-8")))
+            req = json.loads(b64decode(rd_b64.decode("utf-8")))
             response = self.process_request(email, req)
-            response_data_b64 = b64encode(json.dump(response).encode("utf-8"))
+            response_data_b64 = b64encode(json.dumps(response).encode("utf-8"))
             rx_b64 = encrypt_and_mac(enc2_b64, mac2_b64, response_data_b64)
             return rx_b64
         print "bad request", pieces
