@@ -7,7 +7,7 @@ from hmac import HMAC
 from PBKDF import PBKDF2
 import srp
 from scrypt import scrypt
-#from hkdf import HKDF
+from hkdf import HKDF
 
 KEYLEN = 258/8
 assert KEYLEN == 32 # bytes
@@ -36,7 +36,7 @@ def SALT(s, email=None):
         return prefix
     return prefix+email.encode("utf-8")
 def SALT_b64(s, email=None):
-    return b64decode(SALT(s, email))
+    return b64encode(SALT(s, email))
 
 def PBKDF2_b64(password_b64, salt_b64, c, dkLen):
     return b64encode(PBKDF2(password=b64decode(password_b64),
@@ -49,7 +49,7 @@ def scrypt_b64(password_b64, salt_b64, dkLen):
                             dkLen=dkLen))
 def make_keys(C_b64, salt_b64):
     out = HKDF(SKM=b64decode(C_b64), XTS=b64decode(salt_b64),
-               CTXinfo="", L=3*KEYLEN)
+               CTXinfo="", dkLen=3*KEYLEN)
     keys = [b64encode(out[i:i+KEYLEN]) for i in range(0, len(out), KEYLEN)]
     #PWK_b64, MAC_b64, SRPpw_b64 = keys
     return keys

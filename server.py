@@ -15,10 +15,18 @@ class Server:
         self.sessions = {} # -> (SRPKsession, email) # after SRP
     def receive_request(self, tx):
         pieces = json.load(tx.decode("utf-8"))
+        if pieces[0] == "magic-send-safely":
+            print "MAGIC"
+            email, SRPverifier_b64, SRPsalt_b64 = pieces[1:4]
+            self.SRPverifier_b64[email] = SRPverifier_b64
+            self.SRPsalt_b64[email] = SRPsalt_b64
+            return "ok"
         if pieces[0] == "get-salt":
+            print "GET SALT"
             email = pieces[1]
             return self.salt_b64[email]
         if pieces[0] == "srp-1":
+            print "SRP 1"
             sid_b64, email, A_b64 = pieces[1:4]
             if sid_b64 in self.verifier or sid_b64 in self.sessions:
                 raise Oops("sessionid already claimed")
@@ -33,6 +41,7 @@ class Server:
             resp = ["ok", b64encode(s), b64encode(B)]
             return json.dumps(resp).encode("utf-8")
         if pieces[0] == "srp-2":
+            print "SRP-2"
             sid_b64, M_b64 = pieces[1:3]
             if sid_b64 not in self.verifiers:
                 raise Oops("no such session")
@@ -49,6 +58,7 @@ class Server:
             resp = ["ok", b64encode(HAMK)]
             return json.dumps(resp).encode("utf-8")
         if pieces[0] == "encrypted-request":
+            print "ENCRYPTED-REQUEST"
             sid_b64, enc_req_b64 = (pieces[1], pieces[2])
             if sid_b64 not in self.sessions:
                 raise Oops("no such session")
@@ -67,16 +77,18 @@ class Server:
 
     def process_request(self, email, req):
         if req[0] == "set":
+            print " SET"
             self.WUK_b64[email] = req[1]
             return ["ok"]
         if req[0] == "get":
+            print " GET"
             return ["ok", self.WUK_b64[email]]
         print "bad encrypted request", req
         raise Oops("bad request")
 
 class RequestHandler(BaseHTTPRequestHandler):
     def do_POST(self):
-        resp = self.server.my_server.receive_request(self.rfile().read())
+        resp = self.server.my_server.receive_request(self.rfile.read())
         self.wfile.write(resp)
 
 listen_address = ('', 8066)
