@@ -61,10 +61,7 @@ def do_SRP_setup(SRPpw_b64, email):
     SRPsalt, SRPvkey = out
     return b64encode(SRPsalt), b64encode(SRPvkey)
 
-def do_SRP(server_url, email, SRPpw_b64, salt_b64=None):
-    #if not salt_b64:
-    #    # XXX: this is redundant: the 's' in 's,B' challenge is the salt
-    #    salt_b64 = do_network(server_url, ["get-salt", email])
+def do_SRP(server_url, email, SRPpw_b64):
     session_id_b64 = b64encode(os.urandom(KEYLEN))
     # XXX: email is unicode, right? so pass email.encode("utf-8") ?
     u = srp.User(email, b64decode(SRPpw_b64), hash_alg=srp.SHA256)

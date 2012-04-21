@@ -25,10 +25,6 @@ class Handler(resource.Resource):
             self.SRPverifier_b64[email] = SRPverifier_b64
             self.SRPsalt_b64[email] = SRPsalt_b64
             return "ok"
-        #if pieces[0] == "get-salt":
-        #    print "GET SALT"
-        #    email = pieces[1]
-        #    return self.SRPsalt_b64[email]
         if pieces[0] == "srp-1":
             sid_b64, email, A_b64 = pieces[1:4]
             if sid_b64 in self.verifiers or sid_b64 in self.sessions:
