@@ -10,7 +10,7 @@ from util import (SALT_b64, KEYLEN, PBKDF2_b64, scrypt_b64, c1,c2,
 
 email, password, mode = sys.argv[1:4]
 password_b64 = b64encode(password)
-db_server = "http://localhost:8066/"
+db_server = "http://localhost:8066/go"
 
 assert mode in ("init", "read", "changepw")
 if mode == "changepw":
@@ -47,7 +47,7 @@ if mode == "init":
     MAGIC_SEND_SAFELY(db_server, [email, SRPv_b64, SRPsalt_b64])
 
     WUK_b64 = encrypt_and_mac(PWK_b64, MAC_b64, UK_b64)
-    SRPKsession_b64, sid_b64 = do_SRP(db_server, SRPpw_b64, SRPsalt_b64)
+    SRPKsession_b64, sid_b64 = do_SRP(db_server, email, SRPpw_b64, SRPsalt_b64)
     enc1_b64,mac1_b64,enc2_b64,mac2_b64 = make_session_keys(SRPKsession_b64)
     req = ["set", WUK_b64]
     msg = client_create_request(req, enc1_b64, mac1_b64, sid_b64)
@@ -61,7 +61,7 @@ if mode == "init":
 if mode == "read":
     PWK_b64, MAC_b64, SRPpw_b64 = build_PWK(password_b64, email)
     SRPv_b64, SRPsalt_b64 = do_SRP_setup(db_server, SRPpw_b64, email)
-    SRPKsession_b64, sid_b64 = do_SRP(db_server, SRPpw_b64)
+    SRPKsession_b64, sid_b64 = do_SRP(db_server, email, SRPpw_b64)
     enc1_b64,mac1_b64,enc2_b64,mac2_b64 = make_session_keys(SRPKsession_b64)
     req = ["get"]
     msg = client_create_request(req, enc1_b64, mac1_b64, sid_b64)

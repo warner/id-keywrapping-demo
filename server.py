@@ -1,11 +1,14 @@
 import json
 from base64 import b64encode, b64decode
-from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
+from twisted.application import service, internet
+from twisted.web import server, resource, static
+
 import srp
 from util import make_session_keys, encrypt_and_mac, decrypt, Oops
 
-class Server:
+class Handler(resource.Resource):
     def __init__(self):
+        resource.Resource.__init__(self)
         # these three are indexed by email
         self.SRPsalt_b64 = {}
         self.SRPverifier_b64 = {}
@@ -13,7 +16,9 @@ class Server:
         # these two are indexed by sessionid_b64
         self.verifiers = {} # -> (srp.Verifier,email) # during SRP processing
         self.sessions = {} # -> (SRPKsession, email) # after SRP
+
     def receive_request(self, tx):
+        print "receive_request", tx
         pieces = json.loads(tx.decode("utf-8"))
         if pieces[0] == "magic-send-safely":
             print "MAGIC"
@@ -24,11 +29,11 @@ class Server:
         if pieces[0] == "get-salt":
             print "GET SALT"
             email = pieces[1]
-            return self.salt_b64[email]
+            return self.SRPsalt_b64[email]
         if pieces[0] == "srp-1":
             print "SRP 1"
             sid_b64, email, A_b64 = pieces[1:4]
-            if sid_b64 in self.verifier or sid_b64 in self.sessions:
+            if sid_b64 in self.verifiers or sid_b64 in self.sessions:
                 raise Oops("sessionid already claimed")
             salt = b64decode(self.SRPsalt_b64[email])
             vkey = b64decode(self.SRPverifier_b64[email])
@@ -45,7 +50,7 @@ class Server:
             sid_b64, M_b64 = pieces[1:3]
             if sid_b64 not in self.verifiers:
                 raise Oops("no such session")
-            if sid_b64 in self.session:
+            if sid_b64 in self.sessions:
                 raise Oops("sessionid already claimed")
             (v,email) = self.verifiers.pop(sid_b64)
             HAMK = v.verify_session(b64decode(M_b64))
@@ -86,14 +91,14 @@ class Server:
         print "bad encrypted request", req
         raise Oops("bad request")
 
-class RequestHandler(BaseHTTPRequestHandler):
-    def do_POST(self):
-        resp = self.server.my_server.receive_request(self.rfile.read())
-        self.wfile.write(resp)
+    def render_POST(self, req):
+        req.content.seek(0)
+        data = req.content.read()
+        return self.receive_request(data)
 
-listen_address = ('', 8066)
-httpd = HTTPServer(listen_address, RequestHandler)
-httpd.my_server = Server()
-
+root = static.Data("hi", "text/plain")
+root.putChild("go", Handler())
+s = internet.TCPServer(8066, server.Site(root))
+application = service.Application("demo-server")
 print "Starting server.."
-httpd.serve_forever()
+s.setServiceParent(application)
