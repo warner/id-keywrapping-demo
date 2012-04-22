@@ -1,0 +1,32 @@
+Metadata-Version: 1.0
+Name: PBKDF
+Version: 1.0
+Summary: Password based Key Derivation functions from PKCS#5
+Home-page: http://pypi.python.org/pypi/PBKDF
+Author: Peio Popov
+Author-email: peio@peio.org
+License: Public Domain
+Description: 
+        
+        PBKDF - Password based Key Derivation functions from PKCS#5
+        -----------------------------------------------------------
+        
+        Password based key derivation functions (PBKDF1, PBKDF2) as defined in section 5 of PKCS#5
+        
+        A key derivation function produces a derived key from a base key and other parameters.
+        In a password-based key derivation function, the base key is a password and the other
+        parameters are a salt value and an iteration count.
+        
+        For verification are included the test vectors from RFC 3962 Appendix B
+        
+        
+Keywords: PBKDF1,PBKDF2,key derivation,password key derivation,PBKDF,PKCS5,PKCS#5,PKCS
+Platform: UNKNOWN
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Environment :: Console
+Classifier: Intended Audience :: Education
+Classifier: License :: Public Domain
+Classifier: Natural Language :: English
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python
+Classifier: Topic :: Security :: Cryptography
