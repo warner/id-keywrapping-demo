@@ -1,0 +1,22 @@
+Metadata-Version: 1.0
+Name: scrypt
+Version: 0.1
+Summary: Scrypt memory-hard KDF
+Home-page: https://github.com/warner/python-scrypt
+Author: Brian Warner
+Author-email: warner-python-scrypt@lothar.com
+License: MIT
+Description: Python bindings to the 'scrypt' memory-hard KDF algorithm
+        
+        This offers a python interface to a C implementation of the scrypt
+        key-derivation function (http://www.tarsnap.com/scrypt.html/), using code
+        from the 'scrypt' encryption utility on that page.
+        
+        This algorithm takes a password and derives a random key from it, using
+        significant (but configurable) CPU and memory in the process. By design, an
+        attacker must spend comparable resources to test each guess, increasing the
+        costs of a brute-force attack. scrypt is specifically designed to yield no
+        speedups to hardware-based attacks (like GPUs), unlike ordinary iterated
+        hashing functions like PBKDF2.
+        
+Platform: UNKNOWN
