@@ -9,9 +9,9 @@ commands: "init" and "read".
 Building
 --------
 
-1: (cd srp-1.0 && python setup.py build)
-2: (cd python-scrypt-0.1 && python setup.py build)
-3: edit Makefile to reflect the actual build/ directory under
+1. (cd srp-1.0 && python setup.py build)
+2. (cd python-scrypt-0.1 && python setup.py build)
+3. edit Makefile to reflect the actual build/ directory under
    python-scrypt-0.1 . This will include the name of your platform and
    version of python, so the default will probably only work on my Snow
    Leopard box.
@@ -37,3 +37,4 @@ This demo still lacks the following important features:
   the client contains a known-good pubkey) or SSL with a pinned certificate
   (where the client contains a known-good cert hash).
 * outsourced scrypt: all scrypt processing is done locally
+* the spec.org specification document is still wrong
