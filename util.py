@@ -90,6 +90,8 @@ def do_network(url, req_obj):
     req_data = json.dumps(req_obj).encode("utf-8")
     f = urlopen(url, req_data) # POST
     response_data = f.read()
+    if f.getcode() != 200:
+        raise Oops("network error: %s" % response_data[:400])
     return response_data
 
 def make_session_keys(SRPKSession_b64):
