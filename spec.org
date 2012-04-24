@@ -58,8 +58,8 @@
 
 * spec
 ** inputs:
-   - password (string)
-   - email (string)
+   - password (bytestring)
+   - email (ascii string)
 ** constants:
    - KW(s) = "identity.mozilla.com/keywrapping/v1/%s:"
 ** parameters
@@ -79,18 +79,19 @@
      - do SRP
      - return SRPKsession_b64
    - encrypt_and_mac(ENC_b64, MAC_b64, data_b64):
-     - IV = os.urandom(dkLen)
+     - IV = os.urandom(16)
      - A = AES256-CBC(key=ENC, IV, data)
      - B = HMAC-SHA256(key=MAC, data=concat(IV,A))
      - return b64(IV+A+B)
    - decrypt_and_mac(ENC_b64, MAC_b64, encdata_b64)
-     - IV=encdata[:32], data = encdata[32:-32], macout = encdata[-32:]
+     - IV=encdata[:16], data = encdata[16:-32], macout = encdata[-32:]
      - check HMAC-SHA256(key=MAC, data=encdata[:-32]) == macout, else fail
      - return b64(AES256-CBC-decrypt(key=ENC, IV, data))
    - make_session_keys(key=SRPKsession_b64)
      - k = unb64(SRPKsession_b64)
-     - keys=HKDF(SDK=k, XTS=KW(session-keys), CTXinfo="", L=4*dkLen)
-     - ENC1_b64,MAC1_b64,ENC2_b64,MAC2_b64 = [b64(k) for keys.split(32)]
+     - keys=HKDF(SDK=k, XTS=KW(session-keys), CTXinfo="", L=32+16+32+16)
+     - split 'keys' into 32,16,32,16 bytes
+     - ENC1_b64,MAC1_b64,ENC2_b64,MAC2_b64 = [b64(k) for split_keys]
      - SessionID_b64 = b64(SHA256(SRPKession))
    - send_request(msg_obj)  [client-side]
      - data_b64 = b64(json.dump(msg_obj).encode("utf-8"))
