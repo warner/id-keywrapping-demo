@@ -21,10 +21,20 @@ class CorruptDataError(Exception):
 class Oops(Exception):
     pass
 
+from ska.mode import enc_cbc, dec_cbc
+from ska.aes import aes
+from ska.pad import pkcs7_pad, pkcs7_unpad
+
 def aes256cbc_enc(key, iv, data):
-    return data
+    iv = iv[:16]
+    assert len(iv) == 128/8, len(iv)
+    assert len(key) == 256/8, len(key)
+    ct = enc_cbc(aes(key), iv)(pkcs7_pad(data))
+    return ct
 def aes256cbc_dec(key, iv, data):
-    return data
+    iv = iv[:16]
+    pt = pkcs7_unpad(dec_cbc(aes(key), iv)(data))
+    return pt
 
 def SALT(s, email=None):
     assert ":" not in s
@@ -105,6 +115,13 @@ def make_session_keys(SRPKSession_b64):
 def encrypt_and_mac(enc_b64, mac_b64, data_b64):
     IV = os.urandom(KEYLEN)
     A = aes256cbc_enc(key=b64decode(enc_b64), iv=IV, data=b64decode(data_b64))
+    dec = aes256cbc_dec(key=b64decode(enc_b64), iv=IV, data=A)
+    if True: # self-check
+        orig = b64decode(data_b64)
+        if dec != orig:
+            print "data:", len(orig), orig.encode("hex")
+            print "dec :", len(dec), dec.encode("hex")
+            raise ValueError("early")
     B = HMAC(key=b64decode(mac_b64), msg=IV+A, digestmod=sha256).digest()
     return b64encode(IV+A+B)
 

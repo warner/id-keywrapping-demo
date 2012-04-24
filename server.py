@@ -18,14 +18,19 @@ class Handler(resource.Resource):
         self.sessions = {} # -> (SRPKsession, email) # after SRP
 
     def receive_request(self, tx):
+        # HTTP body is utf8(json(PIECES))
         pieces = json.loads(tx.decode("utf-8"))
         if pieces[0] == "magic-send-safely":
+            # PIECES = ["magic-send-safely", email, b64(SRPv), b64(SRPsalt)]
+            # reponse: "ok"
             print "MAGIC"
             email, SRPverifier_b64, SRPsalt_b64 = pieces[1:4]
             self.SRPverifier_b64[email] = SRPverifier_b64
             self.SRPsalt_b64[email] = SRPsalt_b64
             return "ok"
         if pieces[0] == "srp-1":
+            # PIECES = ["srp-1", b64(sessionid), email, b64(A)]
+            # response: utf8(json(["ok", b64(s), b64(B)]))
             sid_b64, email, A_b64 = pieces[1:4]
             if sid_b64 in self.verifiers or sid_b64 in self.sessions:
                 raise Oops("sessionid already claimed")
@@ -40,6 +45,8 @@ class Handler(resource.Resource):
             resp = ["ok", b64encode(s), b64encode(B)]
             return json.dumps(resp).encode("utf-8")
         if pieces[0] == "srp-2":
+            # PIECES = ["srp-2", b64(sessionid), b64(M)]
+            # response: utf8(json(["ok", b64(HAMK)]))
             sid_b64, M_b64 = pieces[1:3]
             if sid_b64 not in self.verifiers:
                 raise Oops("no such session")
@@ -56,15 +63,19 @@ class Handler(resource.Resource):
             resp = ["ok", b64encode(HAMK)]
             return json.dumps(resp).encode("utf-8")
         if pieces[0] == "encrypted-request":
+            # PIECES = ["encrypted-request", b64(sessionid), b64(encreqdata)]
+            # reqdata = utf8(json([REQ]))
+            # response = b64(enc(utf8(json(RESP)))
             sid_b64, enc_req_b64 = (pieces[1], pieces[2])
             if sid_b64 not in self.sessions:
                 raise Oops("no such session")
-            # very short-lived sessions: just one request. XXX need to time
-            # out old sessions, say after 5 minutes.
+            print "enc_req_b64", enc_req_b64
+            # We use very short-lived sessions for now: just one request.
+            # TODO: need to time out old sessions, say after 5 minutes.
             k_b64,email = self.sessions.pop(sid_b64)
             (enc1_b64,mac1_b64,enc2_b64,mac2_b64) = make_session_keys(k_b64)
             rd_b64 = decrypt(enc1_b64, mac1_b64, enc_req_b64)
-            req = json.loads(b64decode(rd_b64.decode("utf-8")))
+            req = json.loads(b64decode(rd_b64).decode("utf-8"))
             response = self.process_request(email, req)
             response_data_b64 = b64encode(json.dumps(response).encode("utf-8"))
             rx_b64 = encrypt_and_mac(enc2_b64, mac2_b64, response_data_b64)
@@ -74,10 +85,14 @@ class Handler(resource.Resource):
 
     def process_request(self, email, req):
         if req[0] == "set":
+            # REQ = ["set", b64(WUK)]
+            # RESP = ["ok"]
             print " SET"
             self.WUK_b64[email] = req[1]
             return ["ok"]
         if req[0] == "get":
+            # REQ = ["get"]
+            # RESP = ["ok", b64(WUK)]
             print " GET"
             return ["ok", self.WUK_b64[email]]
         print "bad encrypted request", req
