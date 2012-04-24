@@ -30,11 +30,10 @@ Incompleteness
 
 This demo still lacks the following important features:
 
-* AES: the actual key-wrapping code is stubbed out. WUK==UK
 * safe setup: I still don't know how to best get the initial account data
   (most importantly the SRP verifier, less importantly email and SRP salt) to
   the server safely. This will require either public-key encryption (where
   the client contains a known-good pubkey) or SSL with a pinned certificate
   (where the client contains a known-good cert hash).
 * outsourced scrypt: all scrypt processing is done locally
-* the spec.org specification document is still wrong
+* the spec.org specification document is probably still wrong
