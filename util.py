@@ -9,8 +9,12 @@ import srp
 from scrypt import scrypt
 from hkdf import HKDF
 
-KEYLEN = 258/8
+KEYLEN = 256/8
 assert KEYLEN == 32 # bytes
+IVLEN = 128/8
+assert IVLEN == 16 # bytes
+MACLEN = 256/8
+assert MACLEN == 32
 c1 = 10000
 c2 = 10000
 N,r,p = 32768,8,1  # scrypt 100MB/1.0s, on work laptop
@@ -26,13 +30,11 @@ from ska.aes import aes
 from ska.pad import pkcs7_pad, pkcs7_unpad
 
 def aes256cbc_enc(key, iv, data):
-    iv = iv[:16]
     assert len(iv) == 128/8, len(iv)
     assert len(key) == 256/8, len(key)
     ct = enc_cbc(aes(key), iv)(pkcs7_pad(data))
     return ct
 def aes256cbc_dec(key, iv, data):
-    iv = iv[:16]
     pt = pkcs7_unpad(dec_cbc(aes(key), iv)(data))
     return pt
 
@@ -106,14 +108,18 @@ def do_network(url, req_obj):
 
 def make_session_keys(SRPKSession_b64):
     SRPKSession = b64decode(SRPKSession_b64)
+    K,M = KEYLEN, MACLEN
     out = HKDF(SKM=SRPKSession, XTS=SALT("session-keys"), CTXinfo="",
-               dkLen=4*KEYLEN)
-    keys = [b64encode(out[i:i+KEYLEN]) for i in range(0, len(out), KEYLEN)]
-    (ENC1, MAC1, ENC2, MAC2) = keys
+               dkLen=K+M+K+M)
+    keys = [out[0:K],
+            out[K:K+M],
+            out[K+M:K+M+K],
+            out[K+M+K:K+M+K+M]]
+    (ENC1, MAC1, ENC2, MAC2) = [b64encode(k) for k in keys]
     return (ENC1, MAC1, ENC2, MAC2)
 
 def encrypt_and_mac(enc_b64, mac_b64, data_b64):
-    IV = os.urandom(KEYLEN)
+    IV = os.urandom(IVLEN)
     A = aes256cbc_enc(key=b64decode(enc_b64), iv=IV, data=b64decode(data_b64))
     dec = aes256cbc_dec(key=b64decode(enc_b64), iv=IV, data=A)
     if True: # self-check
@@ -127,8 +133,8 @@ def encrypt_and_mac(enc_b64, mac_b64, data_b64):
 
 def decrypt(enc_b64, mac_b64, encdata_b64):
     encdata = b64decode(encdata_b64)
-    assert len(encdata) > 2*KEYLEN
-    IV,A,B1 = (encdata[:KEYLEN], encdata[KEYLEN:-KEYLEN], encdata[-KEYLEN:])
+    assert len(encdata) > (IVLEN+MACLEN)
+    IV,A,B1 = (encdata[:IVLEN], encdata[IVLEN:-MACLEN], encdata[-MACLEN:])
     B2 = HMAC(key=b64decode(mac_b64), msg=IV+A, digestmod=sha256).digest()
     if B1 != B2:
         raise CorruptDataError("bad MAC")

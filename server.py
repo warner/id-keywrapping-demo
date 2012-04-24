@@ -69,7 +69,6 @@ class Handler(resource.Resource):
             sid_b64, enc_req_b64 = (pieces[1], pieces[2])
             if sid_b64 not in self.sessions:
                 raise Oops("no such session")
-            print "enc_req_b64", enc_req_b64
             # We use very short-lived sessions for now: just one request.
             # TODO: need to time out old sessions, say after 5 minutes.
             k_b64,email = self.sessions.pop(sid_b64)
