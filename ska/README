@@ -1,0 +1,6 @@
+SKA is a pure Python implementation of Blowfish and AES
+with EBC, CBC and PCBC modes and variable key length support.
+
+SKA project homepage: http://code.google.com/p/ska/
+
+-- Alexey V Michurin <a.michurin@gmail.com>

@@ -1,0 +1,7 @@
+1.0pre3
+ - Use modern 'hashlib' instead deprecated 'md5' for Python >=2.5
+ - More build-in documentation.
+ - Namespaces cleaning.
+ - Cosmetics.
+1.0pre2
+ - First public release.
