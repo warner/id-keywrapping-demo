@@ -10,7 +10,6 @@ class Handler(resource.Resource):
     def __init__(self):
         resource.Resource.__init__(self)
         # these three are indexed by accountID_b64
-        self.SRPsalt_b64 = {}
         self.SRPverifier_b64 = {}
         self.WUK_b64 = {}
         # these two are indexed by sessionid_b64
@@ -21,12 +20,11 @@ class Handler(resource.Resource):
         # HTTP body is utf8(json(PIECES))
         pieces = json.loads(tx.decode("utf-8"))
         if pieces[0] == "magic-send-safely":
-            # ["magic-send-safely", accountID_b64, b64(SRPv), b64(SRPsalt)]
+            # ["magic-send-safely", accountID_b64, b64(SRPv)]
             # reponse: "ok"
             print "MAGIC"
-            accountID_b64, SRPverifier_b64, SRPsalt_b64 = pieces[1:4]
+            accountID_b64, SRPverifier_b64 = pieces[1:3]
             self.SRPverifier_b64[accountID_b64] = SRPverifier_b64
-            self.SRPsalt_b64[accountID_b64] = SRPsalt_b64
             return "ok"
         if pieces[0] == "srp-1":
             # PIECES = ["srp-1", b64(sessionid), accountID_b64, b64(A)]
@@ -34,7 +32,7 @@ class Handler(resource.Resource):
             sid_b64, accountID_b64, A_b64 = pieces[1:4]
             if sid_b64 in self.verifiers or sid_b64 in self.sessions:
                 raise Oops("sessionid already claimed")
-            salt = b64decode(self.SRPsalt_b64[accountID_b64])
+            salt = ""
             vkey = b64decode(self.SRPverifier_b64[accountID_b64])
             v = srp.Verifier(accountID_b64, salt, vkey, b64decode(A_b64),
                              hash_alg=srp.SHA256)

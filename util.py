@@ -66,14 +66,31 @@ def make_keys(C_b64, salt_b64):
     #PWK_b64, MAC_b64, SRPpw_b64, accountID_b64 = keys
     return keys
 
-def do_SRP_setup(SRPpw_b64, accountID_b64):
-    out = srp.create_salted_verification_key(b64decode(accountID_b64),
-                                             b64decode(SRPpw_b64),
-                                             hash_alg=srp.SHA256)
-    SRPsalt, SRPvkey = out
-    return b64encode(SRPsalt), b64encode(SRPvkey)
+def saltless_srp_create(username, password, hash_alg=srp.SHA1,
+                        ng_type=srp.NG_2048, n_hex=None, g_hex=None):
+    # unfortunately the python SRP module doesn't make it easy to pass our
+    # own salt into create_salted_verification_key(), so we have to get
+    # messy. Other SRP libraries (e.g. SJCL) make this easier.
+    from srp._pysrp import _hash_map, get_ng, long_to_bytes, gen_x
+    from srp import NG_CUSTOM
+    if ng_type == NG_CUSTOM and (n_hex is None or g_hex is None):
+        raise ValueError("Both n_hex and g_hex are required when ng_type = NG_CUSTOM")
+    hash_class = _hash_map[ hash_alg ]
+    N,g = get_ng( ng_type, n_hex, g_hex )
+    #_s = long_to_bytes( get_random( 4 ) )
+    _s = None
+    _v = long_to_bytes( pow(g,  gen_x(hash_class, _s, username, password), N))
+    return _v
 
-def do_SRP(server_url, accountID_b64, SRPpw_b64):
+def do_SRP_setup(SRPpw_b64, accountID_b64):
+    # if we didn't need an empty salt, we'd use
+    # srp.create_salted_verification_key() here
+    SRPvkey = saltless_srp_create(b64decode(accountID_b64),
+                                  b64decode(SRPpw_b64),
+                                  hash_alg=srp.SHA256)
+    return b64encode(SRPvkey)
+
+def do_SRP(server_url, accountID_b64, SRPpw_b64, do_network):
     session_id_b64 = b64encode(os.urandom(KEYLEN))
     u = srp.User(accountID_b64, b64decode(SRPpw_b64), hash_alg=srp.SHA256)
     _ignored_accountID_b64, msg1_A = u.start_authentication()
