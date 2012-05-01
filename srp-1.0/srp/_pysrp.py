@@ -125,8 +125,8 @@ def get_ng( ng_type, n_hex, g_hex ):
               
 
 def bytes_to_long(s):
-    n = ord(s[0])
-    for b in ( ord(x) for x in s[1:] ):
+    n = 0
+    for b in ( ord(x) for x in s ):
         n = (n << 8) | b
     return n
     
