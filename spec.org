@@ -76,8 +76,9 @@
          - if pieces[0] == "get-salt"
            - return db_salt_b64[email]
        - receive SRPsalt_b64
-     - do SRP
-     - return SRPKsession_b64
+     - create session_id_b64 (random string)
+     - do SRP, include session_id_b64
+     - return SRPKsession_b64, session_id_b64
    - encrypt_and_mac(ENC_b64, MAC_b64, data_b64):
      - IV = os.urandom(16)
      - A = AES256-CBC(key=ENC, IV, data)
@@ -127,8 +128,8 @@
      - store initial WUK:
        - client:
          - WUK: WUKout_b64 = encrypt_and_mac(PWK, MAC, data=UK)
-         - SRPKsession_b64 = perform_SRP(email, SRPpw_b64, SRPsalt_b64)
-           - server remembers H(Ksession)->(Ksession,email) for a little while
+         - SRPKsession_b64,sessid = perform_SRP(email, SRPpw_b64, SRPsalt_b64)
+           - server remembers sessid->(Ksession,email) for a little while
          - make_session_keys()
          - send_request(["set", WUKout_b64])
          - response should be ["ok"]
@@ -138,8 +139,8 @@
      - client:
        - send email, retrieve SRPsalt
        - compute PWK (while waiting for SRPsalt)
-       - perform SRP to get Ksession
-         - server remembers H(Ksession)->(Ksession,email) for a little while
+       - perform SRP to get Ksession,sessid
+         - server remembers sessid->(Ksession,email) for a little while
        - make_session_keys()
        - send_request(["get"])
        - response should be ["ok", WUKout_b64]
@@ -147,8 +148,5 @@
      - server process_request(email, request):
        - if request[0] == "read": return ["ok", db[email]]
 ** pending changes
-   - use a random nonce as a sessionid, instead of H(KSession). SRP involves
-     two roundtrips, and we need a sessionid to connect them together, so
-     H(Ksession) comes too late.
    - consider whether the generic network-rpc function should always return
      JSON. Also, should errors be reported via HTTP codes or JSON blobs?
