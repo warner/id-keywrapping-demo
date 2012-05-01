@@ -118,7 +118,8 @@
      - A = PBKDF(P=password, S=KW("first-PBKDF")+email, c=c1)
      - B = scrypt(P=A, S=KW("scrypt"), N,r,p)
      - C = PBKDF(P=password+B, S=KW("second-PBKDF")+email, c=c2)
-     - PWK|MAC|ID|SRPpw = HKDF(SKM=C, XTS=KW("four-keys"), CTXinfo="",L=4*dkLen)
+     - PWK|MAC|accountID|SRPpw = HKDF(SKM=C, XTS=KW("four-keys"), CTXinfo="",
+                                      L=4*dkLen)
    - create initial UK (done once, during account setup)
      - UK_b64 = b64(os.urandom(2*dkLen)) # 256 enc + 256 MAC
    - initial key-wrapping setup (done once, during account setup):
@@ -127,29 +128,31 @@
        - SRPpw is already salted by email, and SRPsalt must be shared with
          server, but SRPsalt must be computable by client before talking to
          server
-     - SRPv = SRP(P=SRPpw, username=ID)
-     - send (ID, SRPv) safely to server XXX
+     - SRPv = SRP(P=SRPpw, username=ID_b64)
+       - use b64 encoded accountID, not raw accountID, to play nice with SRP
+         libraries that expect email to be ASCII
+     - send (accountID, SRPv) safely to server XXX
      - store initial WUK:
        - client:
          - WUK: WUKout_b64 = encrypt_and_mac(PWK, MAC, data=UK)
-         - SRPKsession_b64,sessid = perform_SRP(ID, SRPpw_b64, SRPsalt="")
-           - server remembers sessid->(Ksession,ID) for a little while
+         - SRPKsession_b64,sessid = perform_SRP(accountID_b64, SRPpw_b64, SRPsalt="")
+           - server remembers sessid->(Ksession,accountID) for a little while
          - make_session_keys()
          - send_request(["set", WUKout_b64])
          - response should be ["ok"]
-       - server process_request(ID, request):
-         - if request[0] == "set": db[ID]=request[1], return ["ok"]
+       - server process_request(accountID, request):
+         - if request[0] == "set": db[accountID]=request[1], return ["ok"]
    - retrieve WUK (from password)
      - client:
        - compute PWK
        - perform SRP to get Ksession,sessid
-         - server remembers sessid->(Ksession,ID) for a little while
+         - server remembers sessid->(Ksession,accountID) for a little while
        - make_session_keys()
        - send_request(["get"])
        - response should be ["ok", WUKout_b64]
        - UK_b64 = decrypt_and_mac(PWK,MAC,WUKout_b64)
-     - server process_request(ID, request):
-       - if request[0] == "read": return ["ok", db[ID]]
+     - server process_request(accountID, request):
+       - if request[0] == "read": return ["ok", db[accountID]]
 
 ** pending work
 *** implement outsourced-scrypt server
