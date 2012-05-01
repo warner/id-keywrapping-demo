@@ -69,15 +69,9 @@
    - dkLen = 256/8 = 32 # bytes
    - algorithm choices: PBKDF uses HMAC-SHA256
 ** utilities:
-   - perform_SRP(email, SRPpw_b64, SRPsalt_b64=None)
-     - if not SRPsalt:
-       - send TX=json.dump(["get-salt", email]).encode(utf8)
-       - server receive_request(TX)
-         - if pieces[0] == "get-salt"
-           - return db_salt_b64[email]
-       - receive SRPsalt_b64
+   - perform_SRP(email, SRPpw_b64)
      - create session_id_b64 (random string)
-     - do SRP, include session_id_b64
+     - do SRP, include session_id_b64, SRPsalt=""
      - return SRPKsession_b64, session_id_b64
    - encrypt_and_mac(ENC_b64, MAC_b64, data_b64):
      - IV = os.urandom(16)
@@ -135,7 +129,7 @@
      - store initial WUK:
        - client:
          - WUK: WUKout_b64 = encrypt_and_mac(PWK, MAC, data=UK)
-         - SRPKsession_b64,sessid = perform_SRP(accountID_b64, SRPpw_b64, SRPsalt="")
+         - SRPKsession_b64,sessid = perform_SRP(accountID_b64, SRPpw_b64)
            - server remembers sessid->(Ksession,accountID) for a little while
          - make_session_keys()
          - send_request(["set", WUKout_b64])
