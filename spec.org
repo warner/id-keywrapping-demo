@@ -147,6 +147,15 @@
        - UK_b64 = decrypt_and_mac(PWK,MAC,WUKout_b64)
      - server process_request(email, request):
        - if request[0] == "read": return ["ok", db[email]]
-** pending changes
-   - consider whether the generic network-rpc function should always return
-     JSON. Also, should errors be reported via HTTP codes or JSON blobs?
+
+** pending work
+*** implement outsourced-scrypt server
+*** implement password-change protocol
+*** need to decide about setup protection. TOFU/pinned-SSL/embedded-pubkey
+*** consider whether the generic network-rpc function should always return
+    JSON. Also, should errors be reported via HTTP codes or JSON blobs?
+*** making server-side data anonymous
+   - create an account-id in the HKDF step, next to the keys
+   - use that as a server-side index
+   - set SRPsalt="", since SRPpw is already salted by email address, and we
+     can't safely fetch anything from the server before the KDF step
