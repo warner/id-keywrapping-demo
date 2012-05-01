@@ -7,8 +7,7 @@ sys.path.append("srp-1.0")
 sys.path.append("PBKDF-1.0")
 sys.path.append("python-scrypt/build/lib.macosx-10.6-universal-2.6")
 
-from srp import User, Verifier, create_salted_verification_key, \
-     SHA256, NG_2048
+from srp import User, Verifier, create_salted_verification_key, SHA256
 from PBKDF import PBKDF2
 from scrypt import scrypt, pick_params
 
