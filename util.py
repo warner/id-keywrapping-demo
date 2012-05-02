@@ -61,26 +61,27 @@ def scrypt_b64(password_b64, salt_b64, dkLen):
                             dkLen=dkLen))
 def make_keys(C_b64, salt_b64):
     out = HKDF(SKM=b64decode(C_b64), XTS=b64decode(salt_b64),
-               CTXinfo="", dkLen=3*KEYLEN)
+               CTXinfo="", dkLen=4*KEYLEN)
     keys = [b64encode(out[i:i+KEYLEN]) for i in range(0, len(out), KEYLEN)]
-    #PWK_b64, MAC_b64, SRPpw_b64 = keys
+    #PWK_b64, MAC_b64, SRPpw_b64, accountID_b64 = keys
     return keys
 
-def do_SRP_setup(SRPpw_b64, email):
-    out = srp.create_salted_verification_key(email.encode("utf-8"),
+def do_SRP_setup(SRPpw_b64, accountID_b64):
+    out = srp.create_salted_verification_key(accountID_b64,
                                              b64decode(SRPpw_b64),
                                              hash_alg=srp.SHA256)
     SRPsalt, SRPvkey = out
     return b64encode(SRPsalt), b64encode(SRPvkey)
 
-def do_SRP(server_url, email, SRPpw_b64, do_network):
+def do_SRP(server_url, accountID_b64, SRPpw_b64, do_network):
     session_id_b64 = b64encode(os.urandom(KEYLEN))
-    # XXX: email is unicode, right? so pass email.encode("utf-8") ?
-    u = srp.User(email, b64decode(SRPpw_b64), hash_alg=srp.SHA256)
+    # use the base64-encoded accountID as a "username" for SRP, to tolerate
+    # libraries that need printable/ASCII usernames
+    u = srp.User(accountID_b64, b64decode(SRPpw_b64), hash_alg=srp.SHA256)
     _ignored_username, msg1_A = u.start_authentication()
-    assert _ignored_username == email
+    assert _ignored_username == accountID_b64
     rd = do_network(server_url, ["srp-1",
-                                 session_id_b64, email, b64encode(msg1_A)])
+                                 session_id_b64, accountID_b64, b64encode(msg1_A)])
     r = json.loads(rd.decode("utf-8"))
     if r[0] != "ok": raise Oops("srp-1 error")
     s,B = b64decode(r[1]), b64decode(r[2])
