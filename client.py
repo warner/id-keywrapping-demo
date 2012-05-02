@@ -25,20 +25,20 @@ def build_PWK(password_b64, email):
     PWK_b64, MAC_b64, SRPpw_b64 = make_keys(C_b64, SALT_b64("three-keys"))
     return (PWK_b64, MAC_b64, SRPpw_b64)
 
-def MAGIC_SEND_SAFELY(url, secrets):
+def MAGIC_SEND_SAFELY(url, secrets, do_network):
     # TODO: need something deeper. pinned SSL cert or embedded pubkey
     do_network(url, ["magic-send-safely"]+list(secrets))
 
-def do_init(password_b64, email, db_server):
+def do_init(password_b64, email, db_server, do_network):
     UK_b64 = b64encode(os.urandom(2*KEYLEN))
     print "UK created:", UK_b64
 
     PWK_b64, MAC_b64, SRPpw_b64 = build_PWK(password_b64, email)
     SRPsalt_b64, SRPv_b64 = do_SRP_setup(SRPpw_b64, email)
-    MAGIC_SEND_SAFELY(db_server, [email, SRPv_b64, SRPsalt_b64])
+    MAGIC_SEND_SAFELY(db_server, [email, SRPv_b64, SRPsalt_b64], do_network)
 
     WUK_b64 = encrypt_and_mac(PWK_b64, MAC_b64, UK_b64)
-    SRPKsession_b64, sid_b64 = do_SRP(db_server, email, SRPpw_b64)
+    SRPKsession_b64, sid_b64 = do_SRP(db_server, email, SRPpw_b64, do_network)
     enc1_b64,mac1_b64,enc2_b64,mac2_b64 = make_session_keys(SRPKsession_b64)
     req = ["set", WUK_b64]
     msg = client_create_request(req, enc1_b64, mac1_b64, sid_b64)
@@ -48,9 +48,9 @@ def do_init(password_b64, email, db_server):
         raise Oops("server reject")
     return UK_b64
 
-def do_read(password_b64, email, db_server):
+def do_read(password_b64, email, db_server, do_network):
     PWK_b64, MAC_b64, SRPpw_b64 = build_PWK(password_b64, email)
-    SRPKsession_b64, sid_b64 = do_SRP(db_server, email, SRPpw_b64)
+    SRPKsession_b64, sid_b64 = do_SRP(db_server, email, SRPpw_b64, do_network)
     enc1_b64,mac1_b64,enc2_b64,mac2_b64 = make_session_keys(SRPKsession_b64)
     req = ["get"]
     msg = client_create_request(req, enc1_b64, mac1_b64, sid_b64)
@@ -72,11 +72,11 @@ if __name__ == '__main__':
         new_password = sys.argv[4]
         raise NotImplementedError
     elif mode == "init":
-        do_init(password_b64, email, db_server)
+        do_init(password_b64, email, db_server, do_network)
         print "UK stored"
         sys.exit(0)
     elif mode == "read":
-        UK_b64 = do_read(password_b64, email, db_server)
+        UK_b64 = do_read(password_b64, email, db_server, do_network)
         print "UK read:", UK_b64
         sys.exit(0)
     else:
