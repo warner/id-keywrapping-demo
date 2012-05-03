@@ -19,7 +19,7 @@ def do_bench():
         pt = "A"*l
         start = time.time()
         for i in range(100):
-            ct = aes256cbc_enc(key, iv, pt)
+            aes256cbc_enc(key, iv, pt)
         elapsed = time.time() - start
         print "len=%d: %.02g" % (l, elapsed/100)
     bench(16) # 16-byte messages take 5ms
