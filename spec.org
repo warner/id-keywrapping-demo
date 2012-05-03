@@ -125,6 +125,7 @@
        - use b64 encoded account ID, not raw accountID, to play nice with SRP
          libraries that expect username/email to be ASCII
      - send (ID_b64, SRPv) safely to server XXX
+       - verifiers[ID_b64] = SRPv
      - store initial WUK:
        - client:
          - WUK: WUKout_b64 = encrypt_and_mac(PWK, MAC, data=UK)
@@ -146,6 +147,22 @@
        - UK_b64 = decrypt_and_mac(PWK,MAC,WUKout_b64)
      - server process_request(ID_b64, request):
        - if request[0] == "read": return ["ok", db[ID_b64]]
+   - change password
+     - client:
+       - compute PWKold, retrieve WUKold (doing first SRP dance)
+       - unwrap to get UK
+       - compute PWKnew
+       - WUKnew_b64 = encrypt_and_mac(PWKnew, MACnew, data=UK)
+       - do second SRP dance to get SRPKsession_b64,sessid
+       - make_session_keys()
+       - send_request(["change", IDnew_b64, SRPvnew_b64, WUKout_b64])
+         - response should be ["ok"]
+       - server process_request(ID_b64, request):
+         - if request[0] == "change":
+           - db[IDnew_b64]=WUKout_b64
+           - verifiers[IDnew_b64]=SRPvnew_b64
+           - del db[ID_b64], verifiers[ID_b64]
+           - return ["ok"]
 
 ** pending work
 *** implement outsourced-scrypt server

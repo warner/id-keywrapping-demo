@@ -8,7 +8,7 @@ from util import (SALT_b64, KEYLEN, PBKDF2_b64, scrypt_b64, c1,c2,
                   Oops
                   )
 
-def build_PWK(password_b64, email):
+def build_PWK(email, password_b64):
     # this is local
     A_b64 = PBKDF2_b64(password_b64=password_b64,
                        salt_b64=SALT_b64("first-PBKDF",email),
@@ -29,38 +29,59 @@ def MAGIC_SEND_SAFELY(url, secrets, do_network):
     # TODO: need something deeper. pinned SSL cert or embedded pubkey
     do_network(url, ["magic-send-safely"]+list(secrets))
 
-def do_init(password_b64, email, db_server, do_network):
+def do_request(SRPsession, req, do_network, db_server):
+    SRPKsession_b64, sid_b64 = SRPsession
+    enc1_b64,mac1_b64,enc2_b64,mac2_b64 = make_session_keys(SRPKsession_b64)
+    msg = client_create_request(req, enc1_b64, mac1_b64, sid_b64)
+    rx = do_network(db_server, msg)
+    return client_process_response(rx, enc2_b64, mac2_b64)
+
+def do_init(email, password_b64, db_server, do_network):
     UK_b64 = b64encode(os.urandom(2*KEYLEN))
     print "UK created:", UK_b64
 
-    PWK_b64, MAC_b64, SRPpw_b64, accountID_b64 = build_PWK(password_b64, email)
+    PWK_b64, MAC_b64, SRPpw_b64, accountID_b64 = build_PWK(email, password_b64)
     SRPv_b64 = do_SRP_setup(SRPpw_b64, accountID_b64)
     MAGIC_SEND_SAFELY(db_server, [accountID_b64, SRPv_b64], do_network)
 
     WUK_b64 = encrypt_and_mac(PWK_b64, MAC_b64, UK_b64)
-    SRPKsession_b64, sid_b64 = do_SRP(db_server, accountID_b64, SRPpw_b64, do_network)
-    enc1_b64,mac1_b64,enc2_b64,mac2_b64 = make_session_keys(SRPKsession_b64)
-    req = ["set", WUK_b64]
-    msg = client_create_request(req, enc1_b64, mac1_b64, sid_b64)
-    rx = do_network(db_server, msg)
-    resp = client_process_response(rx, enc2_b64, mac2_b64)
+    SRPsession = do_SRP(db_server, accountID_b64, SRPpw_b64, do_network)
+    resp = do_request(SRPsession, ["set", WUK_b64], do_network, db_server)
     if resp[0] != "ok":
         raise Oops("server reject")
     return UK_b64
 
-def do_read(password_b64, email, db_server, do_network):
-    PWK_b64, MAC_b64, SRPpw_b64, accountID_b64 = build_PWK(password_b64, email)
-    SRPKsession_b64, sid_b64 = do_SRP(db_server, accountID_b64, SRPpw_b64, do_network)
-    enc1_b64,mac1_b64,enc2_b64,mac2_b64 = make_session_keys(SRPKsession_b64)
-    req = ["get"]
-    msg = client_create_request(req, enc1_b64, mac1_b64, sid_b64)
-    rx = do_network(db_server, msg)
-    resp = client_process_response(rx, enc2_b64, mac2_b64)
+def read(email, password_b64, db_server, do_network):
+    PWK_b64, MAC_b64, SRPpw_b64, accountID_b64 = build_PWK(email, password_b64)
+    SRPsession = do_SRP(db_server, accountID_b64, SRPpw_b64, do_network)
+    resp = do_request(SRPsession, ["get"], do_network, db_server)
     if resp[0] != "ok":
         raise Oops("server reject")
     WUK_b64 = resp[1]
     UK_b64 = decrypt(PWK_b64, MAC_b64, WUK_b64)
+    SRPdata = (SRPpw_b64, accountID_b64)
+    return UK_b64, SRPdata
+
+def do_read(email, password_b64, db_server, do_network):
+    UK_b64, SRPdata = read(email, password_b64, db_server, do_network)
     return UK_b64
+
+def do_change(email, old_password_b64, new_password_b64, db_server, do_network):
+    # read the old password, compute the new secrets, send a change request
+    UK_b64, oldSRPdata = read(email, old_password_b64, db_server, do_network)
+    old_SRPpw_b64, old_accountID_b64 = oldSRPdata
+
+    (new_PWK_b64, new_MAC_b64, new_SRPpw_b64,
+     new_accountID_b64) = build_PWK(email, new_password_b64)
+    new_SRPv_b64 = do_SRP_setup(new_SRPpw_b64, new_accountID_b64)
+    new_WUK_b64 = encrypt_and_mac(new_PWK_b64, new_MAC_b64, UK_b64)
+
+    SRPsession = do_SRP(db_server, old_accountID_b64, old_SRPpw_b64, do_network)
+    resp = do_request(SRPsession,
+                      ["change", new_accountID_b64, new_SRPv_b64, new_WUK_b64],
+                      do_network, db_server)
+    if resp[0] != "ok":
+        raise Oops("server reject")
 
 
 if __name__ == '__main__':
@@ -68,17 +89,17 @@ if __name__ == '__main__':
     password_b64 = b64encode(password)
     db_server = "http://localhost:8066/go"
 
-    if mode == "changepw":
-        new_password = sys.argv[4]
-        raise NotImplementedError
-    elif mode == "init":
-        do_init(password_b64, email, db_server, do_network)
+    if mode == "init":
+        do_init(email, password_b64, db_server, do_network)
         print "UK stored"
-        sys.exit(0)
     elif mode == "read":
-        UK_b64 = do_read(password_b64, email, db_server, do_network)
+        UK_b64 = do_read(email, password_b64, db_server, do_network)
         print "UK read:", UK_b64
-        sys.exit(0)
+    elif mode == "changepw":
+        new_password = sys.argv[4]
+        new_password_b64 = b64encode(new_password)
+        do_change(email, password_b64, new_password_b64, db_server, do_network)
+        print "password changed"
     else:
         print "unknown mode '%s'" % mode
         sys.exit(1)

@@ -29,7 +29,7 @@ def do_bench():
 
 
 from server import Handler
-from client import do_init, do_read
+from client import do_init, do_read, do_change
 from base64 import b64encode
 import json
 def test_all():
@@ -39,7 +39,11 @@ def test_all():
         return h.receive_request(req_data)
     email = "someone@example.com"
     password_b64 = b64encode("1234")
-    initial_UK_b64 = do_init(password_b64, email, None, fake_network)
-    later_UK_b64 = do_read(password_b64, email, None, fake_network)
+    initial_UK_b64 = do_init(email, password_b64, None, fake_network)
+    later_UK_b64 = do_read(email, password_b64, None, fake_network)
     assert initial_UK_b64 == later_UK_b64
+    new_password_b64 = b64encode("abcd")
+    do_change(email, password_b64, new_password_b64, None, fake_network)
+    final_UK_b64 = do_read(email, new_password_b64, None, fake_network)
+    assert final_UK_b64 == initial_UK_b64
 test_all()

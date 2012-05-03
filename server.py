@@ -92,6 +92,16 @@ class Handler(resource.Resource):
             # RESP = ["ok", b64(WUK)]
             print " GET"
             return ["ok", self.WUK_b64[accountID_b64]]
+        if req[0] == "change":
+            # REQ = ["change", newID, newSRPv, newWUK]
+            # RESP = ["ok"]
+            new_accountID_b64, new_SRPverifier_b64, new_WUK_b64 = req[1:]
+            print " CHANGE: old=%s, new=%s" % (accountID_b64, new_accountID_b64)
+            self.SRPverifier_b64[new_accountID_b64] = new_SRPverifier_b64
+            self.WUK_b64[new_accountID_b64] = new_WUK_b64
+            del self.SRPverifier_b64[accountID_b64]
+            del self.WUK_b64[accountID_b64]
+            return ["ok"]
         print "bad encrypted request", req
         raise Oops("bad request")
 
