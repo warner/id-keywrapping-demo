@@ -34,9 +34,8 @@ def do_init(password_b64, email, db_server, do_network):
     print "UK created:", UK_b64
 
     PWK_b64, MAC_b64, SRPpw_b64, accountID_b64 = build_PWK(password_b64, email)
-    SRPsalt_b64, SRPv_b64 = do_SRP_setup(SRPpw_b64, accountID_b64)
-    MAGIC_SEND_SAFELY(db_server, [accountID_b64, SRPv_b64, SRPsalt_b64],
-                      do_network)
+    SRPv_b64 = do_SRP_setup(SRPpw_b64, accountID_b64)
+    MAGIC_SEND_SAFELY(db_server, [accountID_b64, SRPv_b64], do_network)
 
     WUK_b64 = encrypt_and_mac(PWK_b64, MAC_b64, UK_b64)
     SRPKsession_b64, sid_b64 = do_SRP(db_server, accountID_b64, SRPpw_b64, do_network)
