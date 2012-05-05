@@ -166,12 +166,25 @@
 
 ** pending work
 *** implement outsourced-scrypt server
-*** implement password-change protocol
 *** need to decide about setup protection. TOFU/pinned-SSL/embedded-pubkey
 *** consider whether the generic network-rpc function should always return
     JSON. Also, should errors be reported via HTTP codes or JSON blobs?
+*** can we avoid stashing any early data on the server?
+    - scrypt N/r/p values. two issues:
+      - we don't want a rogue server to convince the client to use
+        artificially low busywork, since that reduces the cost of attack once
+        the client reveals a value derived through the work factor. So
+        relying purely on a local value avoids that.
+      - but all shared clients must use the same N/r/p. And it needs to be
+        the lowest-common-denominator of the user's devices (i.e. if they're
+        ever going to have a slow phone, it needs to be usable there).
+    - SRP salt (use empty string, since SRPpw is already salted by email
+      address)
+    - should we have a separate repository, which holds non-password-derived
+      values (indexed by email address)?
 *** making server-side data anonymous
-   - create an account-id in the HKDF step, next to the keys
-   - use that as a server-side index
-   - set SRPsalt="", since SRPpw is already salted by email address, and we
-     can't safely fetch anything from the server before the KDF step
+**** currently it is:
+    - create an account-id in the HKDF step, next to the keys
+    - use that as a server-side index
+    - set SRPsalt="", since SRPpw is already salted by email address, and we
+      can't safely fetch anything from the server before the KDF step
