@@ -188,3 +188,12 @@
     - use that as a server-side index
     - set SRPsalt="", since SRPpw is already salted by email address, and we
       can't safely fetch anything from the server before the KDF step
+*** consider making PWK a single 256-bit key, then HKDF to get enc+mac keys
+    - to make alternative PWK-management tools (pairing-based) easier; their
+      output is a single key
+* tools needed by client implementations
+  - scrypt
+  - PBKDF2 (with SHA256)
+  - SRP (create-verifier, do-client-side)
+  - AES/CBC/HMAC-SHA256
+  - HKDF (or just SHA256)
