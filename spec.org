@@ -111,10 +111,14 @@
    - compute PWK:
      - A = PBKDF(P=password, S=KW("first-PBKDF")+email, c=c1)
      - B = scrypt(P=A, S=KW("scrypt"), N,r,p)
+       - or do offloaded-scrypt, to a different server than DB server
      - C = PBKDF(P=password+B, S=KW("second-PBKDF")+email, c=c2)
      - PWK|MAC|ID|SRPpw = HKDF(SKM=C, XTS=KW("four-keys"), CTXinfo="",L=4*dkLen)
    - create initial UK (done once, during account setup)
      - UK_b64 = b64(os.urandom(2*dkLen)) # 256 enc + 256 MAC
+   - offloaded-scrypt
+     - send_request(["do-scrypt", A_b64, N,r,p])
+     - expect ["ok", B_b64]
    - initial key-wrapping setup (done once, during account setup):
      - compute PWK
      - SRPsalt = ""
