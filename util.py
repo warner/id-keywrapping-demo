@@ -17,7 +17,7 @@ MACLEN = 256/8
 assert MACLEN == 32
 c1 = 10000
 c2 = 10000
-N,r,p = 32768,8,1  # scrypt 100MB/1.0s, on work laptop
+SCRYPT_PARAMS = (32768,8,1) # N,r,p, uses 100MB/1.0s on my work laptop
 
 class CorruptDataError(Exception):
     pass
@@ -56,6 +56,7 @@ def PBKDF2_b64(password_b64, salt_b64, c, dkLen):
                             c=c, dkLen=dkLen))
 
 def scrypt_b64(password_b64, salt_b64, dkLen):
+    N,r,p = SCRYPT_PARAMS
     return b64encode(scrypt(password=b64decode(password_b64),
                             salt=b64decode(salt_b64), N=N,r=r,p=p,
                             dkLen=dkLen))
