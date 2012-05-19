@@ -186,12 +186,30 @@
       address)
     - should we have a separate repository, which holds non-password-derived
       values (indexed by email address)?
+      - would protect against stored-data attackers, as long as we don't
+        reveal things like last-accessed timestamps
+      - wouldn't protect against live attackers. They would gain the
+        advantage of limiting their search to one email address. I don't
+        think that's a big advantage, in practice.
 *** making server-side data anonymous
 **** currently it is:
     - create an account-id in the HKDF step, next to the keys
     - use that as a server-side index
     - set SRPsalt="", since SRPpw is already salted by email address, and we
       can't safely fetch anything from the server before the KDF step
+**** how much of an advantage would de-anonymization provide?
+     - with anondata, if I want to find user=A's password, I must test user=A
+       password=X for all X, then see if the resulting AccID is in the
+       system. I must store all captured rows (AccID and WUK). For each test,
+       I must do an O(logN) lookup on the data to find a match. For botnet
+       systems, that means either serving the whole dataset to all bots, or
+       having bots send back a constant stream of X+AccID pairs.
+     - if I want to find any user that has a given password, I do the same
+       thing but user=X and password=A. Same lookup requirements.
+     - with nonanondata, the attacker must still test the same A/X
+       combinations, but they only have to compare AccID against the
+       known-user-A row, so lookup time is O(1). Minimal data must be sent to
+       botnets.
 *** consider making PWK a single 256-bit key, then HKDF to get enc+mac keys
     - to make alternative PWK-management tools (pairing-based) easier; their
       output is a single key
