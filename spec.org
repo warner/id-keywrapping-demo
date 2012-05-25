@@ -210,6 +210,9 @@
        combinations, but they only have to compare AccID against the
        known-user-A row, so lookup time is O(1). Minimal data must be sent to
        botnets.
+     - actually, what the attacker will do is deliver a Bloom Filter of the
+       S1 lookup values (1% error optimal takes 9.6 bits per element, so 100M
+       users = 120MB, 0.1% error is 180MB). rats.
 *** consider making PWK a single 256-bit key, then HKDF to get enc+mac keys
     - to make alternative PWK-management tools (pairing-based) easier; their
       output is a single key
