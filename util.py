@@ -1,13 +1,13 @@
 
-import os, json
+import os, json, math, struct
 from urllib import urlopen
 from hashlib import sha256
 from base64 import b64encode, b64decode
 from hmac import HMAC
-from PBKDF import PBKDF2
 import srp
 from scrypt import scrypt
 from hkdf import HKDF
+from pbkdf2 import PBKDF2
 
 KEYLEN = 256/8
 assert KEYLEN == 32 # bytes
@@ -53,7 +53,7 @@ def SALT_b64(s, email=None):
 def PBKDF2_b64(password_b64, salt_b64, c, dkLen):
     return b64encode(PBKDF2(password=b64decode(password_b64),
                             salt=b64decode(salt_b64),
-                            c=c, dkLen=dkLen))
+                            count=c, dkLen=dkLen, hfunc=sha256))
 
 def scrypt_b64(password_b64, salt_b64, dkLen):
     N,r,p = SCRYPT_PARAMS

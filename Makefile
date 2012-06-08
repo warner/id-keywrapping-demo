@@ -1,5 +1,5 @@
 
-export PYTHONPATH=ska:srp-1.0:PBKDF-1.0:python-scrypt-0.1/build/lib.macosx-10.6-universal-2.6
+export PYTHONPATH=.:ska:srp-1.0:python-scrypt-0.1/build/lib.macosx-10.6-universal-2.6
 
 start:
 	twistd --pidfile logs/server.pid --logfile logs/server.log -y server.py
@@ -16,5 +16,8 @@ client-read:
 
 repl:
 	python
-test:
-	python test.py
+
+test-all:
+	python test/test-all.py
+test-pbkdf:
+	PYTHONPATH=.:PBKDF-1.0 python test/compare_pbkdf.py

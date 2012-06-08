@@ -27,23 +27,3 @@ def do_bench():
     bench(2000) # 2000-byte messages take 300ms
     # C++ (Crypto++) does AES-CTR at 113MBps, 18000x faster
 
-
-from server import Handler
-from client import do_init, do_read, do_change
-from base64 import b64encode
-import json
-def test_all():
-    h = Handler()
-    def fake_network(url, req_obj):
-        req_data = json.dumps(req_obj).encode("utf-8")
-        return h.receive_request(req_data)
-    email = "someone@example.com"
-    password_b64 = b64encode("1234")
-    initial_UK_b64 = do_init(email, password_b64, None, fake_network)
-    later_UK_b64 = do_read(email, password_b64, None, fake_network)
-    assert initial_UK_b64 == later_UK_b64
-    new_password_b64 = b64encode("abcd")
-    do_change(email, password_b64, new_password_b64, None, fake_network)
-    final_UK_b64 = do_read(email, new_password_b64, None, fake_network)
-    assert final_UK_b64 == initial_UK_b64
-test_all()
