@@ -223,6 +223,21 @@
 *** consider making PWK a single 256-bit key, then HKDF to get enc+mac keys
     - to make alternative PWK-management tools (pairing-based) easier; their
       output is a single key
+*** why bother doing set-WUK inside SRP? it happens right after set-SRPv
+    - instead of A=["init",email,SRPv], then SRP(WUK)
+    - why not do B=["init", email, SRPv, WUK]?
+    - probably doesn't provide much benefit, as long as both are in SSL
+    - SRPv and WUK-MAC provide the same attack vector (SRPv includes some
+      bignum math, WUK-MAC does not, but both include scrypt)
+    - once the password is forced, a single online query can grab WUK
+      - might be a race that favors the user: if we can detect that someone
+        grabbed the SRPv, but for some reason they weren't able to grab the
+        WUK at the same time, then they might be able to change their
+        password before the attacker finishes the dictionary attack
+      - if so, then B would retain that protective race against a lazy SSL
+        MitM (who behaves like a passive eavesdropper, and doesn't do
+        anything specific to our protocol)
+      - but, that seems dubious. How would you detect an MitM during init?
 * tools needed by client implementations
   - scrypt
   - PBKDF2 (with SHA256)
