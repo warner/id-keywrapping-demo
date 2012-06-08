@@ -1,5 +1,5 @@
 
-import os, json, math, struct
+import os, json
 from urllib import urlopen
 from hashlib import sha256
 from base64 import b64encode, b64decode
@@ -62,13 +62,14 @@ def scrypt_b64(password_b64, salt_b64, dkLen):
                             dkLen=dkLen))
 def make_keys(C_b64, salt_b64):
     out = HKDF(SKM=b64decode(C_b64), XTS=b64decode(salt_b64),
-               CTXinfo="", dkLen=4*KEYLEN)
+               CTXinfo="", dkLen=3*KEYLEN)
     keys = [b64encode(out[i:i+KEYLEN]) for i in range(0, len(out), KEYLEN)]
-    #PWK_b64, MAC_b64, SRPpw_b64, accountID_b64 = keys
+    #PWK_b64, MAC_b64, SRPpw_b64 = keys
     return keys
 
 def saltless_srp_create(username, password, hash_alg=srp.SHA1,
                         ng_type=srp.NG_2048, n_hex=None, g_hex=None):
+    assert isinstance(username, str) # already UTF8-encoded
     # unfortunately the python SRP module doesn't make it easy to pass our
     # own salt into create_salted_verification_key(), so we have to get
     # messy. Other SRP libraries (e.g. SJCL) make this easier.
@@ -83,22 +84,23 @@ def saltless_srp_create(username, password, hash_alg=srp.SHA1,
     _v = long_to_bytes( pow(g,  gen_x(hash_class, _s, username, password), N))
     return _v
 
-def do_SRP_setup(SRPpw_b64, accountID_b64):
+def do_SRP_setup(SRPpw_b64, email):
     # if we didn't need an empty salt, we'd use
     # srp.create_salted_verification_key() here
-    SRPvkey = saltless_srp_create(accountID_b64, b64decode(SRPpw_b64),
+    SRPvkey = saltless_srp_create(email.encode("utf-8"), b64decode(SRPpw_b64),
                                   hash_alg=srp.SHA256)
     return b64encode(SRPvkey)
 
-def do_SRP(server_url, accountID_b64, SRPpw_b64, do_network):
+def do_SRP(server_url, email, SRPpw_b64, do_network):
     session_id_b64 = b64encode(os.urandom(KEYLEN))
     # use the base64-encoded accountID as a "username" for SRP, to tolerate
     # libraries that need printable/ASCII usernames
-    u = srp.User(accountID_b64, b64decode(SRPpw_b64), hash_alg=srp.SHA256)
+    u = srp.User(email.encode("utf-8"), b64decode(SRPpw_b64),
+                 hash_alg=srp.SHA256)
     _ignored_username, msg1_A = u.start_authentication()
-    assert _ignored_username == accountID_b64
+    assert _ignored_username == email.encode("utf-8")
     rd = do_network(server_url, ["srp-1",
-                                 session_id_b64, accountID_b64, b64encode(msg1_A)])
+                                 session_id_b64, email, b64encode(msg1_A)])
     r = json.loads(rd.decode("utf-8"))
     if r[0] != "ok": raise Oops("srp-1 error")
     s,B = b64decode(r[1]), b64decode(r[2])
@@ -114,7 +116,6 @@ def do_SRP(server_url, accountID_b64, SRPpw_b64, do_network):
     if not u.authenticated():
         raise Oops("SRP rejected")
     return b64encode(u.get_session_key()), session_id_b64
-    
 
 def do_network(url, req_obj):
     req_data = json.dumps(req_obj).encode("utf-8")
@@ -159,15 +160,12 @@ def decrypt(enc_b64, mac_b64, encdata_b64):
     data = aes256cbc_dec(key=b64decode(enc_b64), iv=IV, data=A)
     return b64encode(data)
 
-def client_create_request(req_obj, enc1_b64, mac1_b64, SessionID_b64):
+def client_create_request(req_obj, enc1_b64, mac1_b64, email):
     data_b64 = b64encode(json.dumps(req_obj).encode("utf-8"))
     enc_data_b64 = encrypt_and_mac(enc1_b64, mac1_b64, data_b64)
-    enc_msg = ["encrypted-request", SessionID_b64, enc_data_b64]
+    enc_msg = ["encrypted-request", email, enc_data_b64]
     return enc_msg
 
 def client_process_response(rx_b64, enc2_b64, mac2_b64):
     response_data_b64 = decrypt(enc2_b64, mac2_b64, rx_b64)
     return json.loads(b64decode(response_data_b64).decode("utf-8"))
-
-
-    

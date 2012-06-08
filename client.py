@@ -9,9 +9,11 @@ from util import (SALT_b64, KEYLEN, PBKDF2_b64, scrypt_b64, c1,c2,
                   )
 
 def build_PWK(email, password_b64, scrypt_server, do_network):
+    assert isinstance(email, unicode)
     # this is local
     A_b64 = PBKDF2_b64(password_b64=password_b64,
-                       salt_b64=SALT_b64("first-PBKDF",email),
+                       salt_b64=SALT_b64("first-PBKDF",
+                                         email.encode("utf-8")),
                        c=c1, dkLen=KEYLEN)
     # can we do scrypt fast enough locally?
     offload_scrypt = False # XXX
@@ -29,14 +31,15 @@ def build_PWK(email, password_b64, scrypt_server, do_network):
     # this is local
     merged_b64 = b64encode(b64decode(B_b64)+b64decode(password_b64))
     C_b64 = PBKDF2_b64(password_b64=merged_b64,
-                       salt_b64=SALT_b64("second-PBKDF",email),
+                       salt_b64=SALT_b64("second-PBKDF",
+                                         email.encode("utf-8")),
                        c=c2, dkLen=KEYLEN)
-    keys = make_keys(C_b64, SALT_b64("three-keys"))
-    return keys # (PWK_b64, MAC_b64, SRPpw_b64, accountID_b64)
+    keys = make_keys(C_b64, SALT_b64("HKDF"))
+    return keys # (PWK_b64, MAC_b64, SRPpw_b64)
 
 def MAGIC_SEND_SAFELY(url, secrets, do_network):
-    # TODO: need something deeper. pinned SSL cert or embedded pubkey
-    do_network(url, ["magic-send-safely"]+list(secrets))
+    # this is a vulnerability window. It really wants to use pinned SSL.
+    do_network(url, ["magic-init"]+list(secrets))
 
 def do_request(SRPsession, req, do_network, db_server):
     SRPKsession_b64, sid_b64 = SRPsession
@@ -50,12 +53,12 @@ def do_init(email, password_b64, db_server, do_network, scrypt_server):
     print "UK created:", UK_b64
 
     keys = build_PWK(email, password_b64, scrypt_server, do_network)
-    PWK_b64, MAC_b64, SRPpw_b64, accountID_b64 = keys
-    SRPv_b64 = do_SRP_setup(SRPpw_b64, accountID_b64)
-    MAGIC_SEND_SAFELY(db_server, [accountID_b64, SRPv_b64], do_network)
+    PWK_b64, MAC_b64, SRPpw_b64 = keys
+    SRPv_b64 = do_SRP_setup(SRPpw_b64, email)
+    MAGIC_SEND_SAFELY(db_server, [email, SRPv_b64], do_network)
 
     WUK_b64 = encrypt_and_mac(PWK_b64, MAC_b64, UK_b64)
-    SRPsession = do_SRP(db_server, accountID_b64, SRPpw_b64, do_network)
+    SRPsession = do_SRP(db_server, email, SRPpw_b64, do_network)
     resp = do_request(SRPsession, ["set", WUK_b64], do_network, db_server)
     if resp[0] != "ok":
         raise Oops("server reject")
@@ -63,36 +66,34 @@ def do_init(email, password_b64, db_server, do_network, scrypt_server):
 
 def read(email, password_b64, db_server, do_network, scrypt_server):
     keys = build_PWK(email, password_b64, scrypt_server, do_network)
-    PWK_b64, MAC_b64, SRPpw_b64, accountID_b64 = keys
-    SRPsession = do_SRP(db_server, accountID_b64, SRPpw_b64, do_network)
+    PWK_b64, MAC_b64, SRPpw_b64 = keys
+    SRPsession = do_SRP(db_server, email, SRPpw_b64, do_network)
     resp = do_request(SRPsession, ["get"], do_network, db_server)
     if resp[0] != "ok":
         raise Oops("server reject")
     WUK_b64 = resp[1]
     UK_b64 = decrypt(PWK_b64, MAC_b64, WUK_b64)
-    SRPdata = (SRPpw_b64, accountID_b64)
-    return UK_b64, SRPdata
+    return UK_b64, SRPpw_b64
 
 def do_read(email, password_b64, db_server, do_network, scrypt_server):
-    UK_b64, SRPdata = read(email, password_b64, db_server, do_network,
-                           scrypt_server)
+    UK_b64, SRPpw_b64 = read(email, password_b64, db_server, do_network,
+                             scrypt_server)
     return UK_b64
 
 def do_change(email, old_password_b64, new_password_b64, db_server, do_network,
               scrypt_server):
     # read the old password, compute the new secrets, send a change request
-    UK_b64, oldSRPdata = read(email, old_password_b64, db_server, do_network,
-                              scrypt_server)
-    old_SRPpw_b64, old_accountID_b64 = oldSRPdata
+    UK_b64, old_SRPpw_b64 = read(email, old_password_b64, db_server, do_network,
+                                 scrypt_server)
 
     keys = build_PWK(email, new_password_b64, scrypt_server, do_network)
-    (new_PWK_b64, new_MAC_b64, new_SRPpw_b64, new_accountID_b64) = keys
-    new_SRPv_b64 = do_SRP_setup(new_SRPpw_b64, new_accountID_b64)
+    (new_PWK_b64, new_MAC_b64, new_SRPpw_b64) = keys
+    new_SRPv_b64 = do_SRP_setup(new_SRPpw_b64, email)
     new_WUK_b64 = encrypt_and_mac(new_PWK_b64, new_MAC_b64, UK_b64)
 
-    SRPsession = do_SRP(db_server, old_accountID_b64, old_SRPpw_b64, do_network)
+    SRPsession = do_SRP(db_server, email, old_SRPpw_b64, do_network)
     resp = do_request(SRPsession,
-                      ["change", new_accountID_b64, new_SRPv_b64, new_WUK_b64],
+                      ["change", new_SRPv_b64, new_WUK_b64],
                       do_network, db_server)
     if resp[0] != "ok":
         raise Oops("server reject")
@@ -100,6 +101,7 @@ def do_change(email, old_password_b64, new_password_b64, db_server, do_network,
 
 if __name__ == '__main__':
     email, password, mode = sys.argv[1:4]
+    email = unicode(email)
     password_b64 = b64encode(password)
     scrypt_server = "http://localhost:8067/do-scrypt"
     db_server = "http://localhost:8066/go"

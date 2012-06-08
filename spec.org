@@ -59,9 +59,10 @@
 * spec
 ** inputs:
    - password (bytestring)
-   - email (ascii string)
+   - email (unicode string)
 ** constants:
-   - KW(s) = "identity.mozilla.com/keywrapping/v1/%s:"
+   - KW(s) = "identity.mozilla.com/keywrapping/v1/%s"%s
+   - KWE(s,email) = ("identity.mozilla.com/keywrapping/v1/%s:"%s)+utf8(email)
 ** parameters
    - c1 = 10000 # PBKDF2 iteration count
    - c2 = 10000
@@ -71,7 +72,7 @@
 ** utilities:
    - perform_SRP(email, SRPpw_b64)
      - create session_id_b64 (random string)
-     - do SRP, include session_id_b64, SRPsalt=""
+     - do SRP, include session_id_b64, SRPsalt="", user=utf8(email)
      - return SRPKsession_b64, session_id_b64
    - encrypt_and_mac(ENC_b64, MAC_b64, data_b64):
      - IV = os.urandom(16)
@@ -84,7 +85,7 @@
      - return b64(AES256-CBC-decrypt(key=ENC, IV, data))
    - make_session_keys(key=SRPKsession_b64)
      - k = unb64(SRPKsession_b64)
-     - keys=HKDF(SDK=k, XTS=KW(session-keys), CTXinfo="", L=32+16+32+16)
+     - keys=HKDF(SDK=k, XTS=KWE(session-keys,email), CTXinfo="", L=32+16+32+16)
      - split 'keys' into 32,16,32,16 bytes
      - ENC1_b64,MAC1_b64,ENC2_b64,MAC2_b64 = [b64(k) for split_keys]
      - SessionID_b64 = b64(SHA256(SRPKession))
@@ -108,49 +109,56 @@
        - response_data_b64 = b64(json.dump(response).encode(utf8))
        - return RX_b64 = encrypt_and_mac(ENC2_b64,MAC2_b64,response_b64)
 ** code:
-   - compute PWK:
-     - A = PBKDF(P=password, S=KW("first-PBKDF")+email, c=c1)
+   - KDF step:
+     - A = PBKDF2(P=password, S=KWE("first-PBKDF",email), c=c1)
      - B = scrypt(P=A, S=KW("scrypt"), N,r,p)
        - or do offloaded-scrypt, to a different server than DB server
-     - C = PBKDF(P=password+B, S=KW("second-PBKDF")+email, c=c2)
-     - PWK|MAC|ID|SRPpw = HKDF(SKM=C, XTS=KW("four-keys"), CTXinfo="",L=4*dkLen)
+     - C = PBKDF2(P=password+B, S=KWE("second-PBKDF",email), c=c2)
+     - PWK|MAC|SRPpw = HKDF(SKM=C, XTS=KW("HKDF"), CTXinfo="",L=3*dkLen)
    - create initial UK (done once, during account setup)
      - UK_b64 = b64(os.urandom(2*dkLen)) # 256 enc + 256 MAC
    - offloaded-scrypt
      - send_request(["do-scrypt", A_b64, N,r,p])
      - expect ["ok", B_b64]
-   - initial key-wrapping setup (done once, during account setup):
-     - compute PWK
+   - SRP dance:
      - SRPsalt = ""
        - SRPpw is already salted by email, and SRPsalt must be shared with
          server, but SRPsalt must be computable by client before talking to
          server
-     - SRPv = SRP(P=SRPpw, username=ID_b64)
-       - use b64 encoded account ID, not raw accountID, to play nice with SRP
-         libraries that expect username/email to be ASCII
-     - send (ID_b64, SRPv) safely to server XXX
-       - verifiers[ID_b64] = SRPv
+     - username = utf8(email)
+   - initial key-wrapping setup (done once, during browser setup):
+     - compute PWK
+     - decide whether server needs SRPv and WUK or not:
+       - yes for account creation (first browser)
+       - no for second and subsequent browsers
+       - must ask server (get a boolean), MitM might lie
+       - sending SRPv to MitM enables their attack
+   - sending SRPv+WUK to server:
+     - SRPv = SRP(P=SRPpw, username=utf8(email))
+     - send (email, SRPv) safely to server
+       - XXX: this is the vulnerable point. Needs at least pinned SSL.
+       - verifiers[email] = SRPv
      - store initial WUK:
        - client:
          - WUK: WUKout_b64 = encrypt_and_mac(PWK, MAC, data=UK)
-         - SRPKsession_b64,sessid = perform_SRP(ID_b64, SRPpw_b64)
-           - server remembers sessid->(Ksession,ID_b64) for a little while
+         - SRPKsession_b64,sessid = perform_SRP(email, SRPpw_b64)
+           - server remembers sessid->(Ksession,email) for a little while
          - make_session_keys()
          - send_request(["set", WUKout_b64])
          - response should be ["ok"]
-       - server process_request(ID_b64, request):
-         - if request[0] == "set": db[ID_b64]=request[1], return ["ok"]
+       - server process_request(email, request):
+         - if request[0] == "set": db[email]=request[1], return ["ok"]
    - retrieve WUK (from password)
      - client:
        - compute PWK
        - perform SRP to get Ksession,sessid
-         - server remembers sessid->(Ksession,ID) for a little while
+         - server remembers sessid->(Ksession,email) for a little while
        - make_session_keys()
        - send_request(["get"])
        - response should be ["ok", WUKout_b64]
        - UK_b64 = decrypt_and_mac(PWK,MAC,WUKout_b64)
-     - server process_request(ID_b64, request):
-       - if request[0] == "read": return ["ok", db[ID_b64]]
+     - server process_request(email, request):
+       - if request[0] == "read": return ["ok", db[email]]
    - change password
      - client:
        - compute PWKold, retrieve WUKold (doing first SRP dance)
@@ -159,13 +167,12 @@
        - WUKnew_b64 = encrypt_and_mac(PWKnew, MACnew, data=UK)
        - do second SRP dance to get SRPKsession_b64,sessid
        - make_session_keys()
-       - send_request(["change", IDnew_b64, SRPvnew_b64, WUKout_b64])
+       - send_request(["change", SRPvnew_b64, WUKout_b64])
          - response should be ["ok"]
-       - server process_request(ID_b64, request):
+       - server process_request(email, request):
          - if request[0] == "change":
-           - db[IDnew_b64]=WUKout_b64
-           - verifiers[IDnew_b64]=SRPvnew_b64
-           - del db[ID_b64], verifiers[ID_b64]
+           - db[email]=WUKout_b64
+           - verifiers[email]=SRPvnew_b64
            - return ["ok"]
 
 ** pending work
