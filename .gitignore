@@ -10,3 +10,5 @@
 /logs/scrypt-server.pid
 /logs/server.log
 /logs/server.pid
+/js/npm-debug.log
+/js/node_modules/

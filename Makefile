@@ -21,3 +21,10 @@ test-all:
 	python test/test-all.py
 test-pbkdf:
 	PYTHONPATH=.:PBKDF-1.0 python test/compare_pbkdf.py
+
+.PHONY: js-build js
+js-build:
+	cd js && npm install
+js:
+	cd js && npm start
+# then open http://localhost:8080/

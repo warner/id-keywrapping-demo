@@ -1,0 +1,20 @@
+{
+    "name": "keywrapping-demo",
+    "version": "0.0.1",
+    "private": true,
+    "dependencies": {
+        "connect": "1.7.2",
+        "express": "2.5.0",
+        "jwcrypto": "0.2.2",
+        "underscore": "1.3.1"
+    },
+    "devDependencies": {
+    },
+    "scripts": {
+        "test": "./scripts/test",
+        "start": "./scripts/run_locally.js"
+    },
+    "engines": {
+        "node": ">= 0.6.2"
+    }
+}
