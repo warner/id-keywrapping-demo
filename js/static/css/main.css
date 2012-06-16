@@ -1,0 +1,24 @@
+body {
+    background: #DFD;
+}
+
+.inputs {
+    float: left;
+    height: 100px;
+    width: 300px;
+    border: 2px solid blue;
+    padding: 5px;
+}
+
+.kdf {
+    float: right;
+    height: 200px;
+    width: 600px;
+    border: 2px solid red;
+    padding: 5px;
+}
+
+.fixed {
+ font-family: "Courier New",Courier,monospace;
+ font-size: 80%;
+}
