@@ -55,6 +55,14 @@
    - I username
    - p password
 *** http://pypi.python.org/pypi/srp
+*** SRP6 optimizes messages down to:
+    - C->S: I (username)
+    - S->C: N,g (group parameters), s (salt), B (server value)
+    - (now C knows purported session key K=H(S))
+    - C->S: A (client value), M1=H(A,B,S) (proof of knowledge of S)
+    - (now S knows session key too, can verify client knowledge with M1)
+    - S->C: M2=H(A,M1,S)
+    - (now C verifies server knowledge)
 
 * spec
 ** inputs:
